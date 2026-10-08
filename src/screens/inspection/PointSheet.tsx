@@ -101,7 +101,9 @@ export default function PointSheet() {
         )}
 
         <div className="list">
-          <Row title="Koordinaten" value={p.position ? formatCoord(p.position) : 'nicht verortet'} chevron={false} />
+          {p.planId
+            ? <Row title="Lage" value={`auf Plan „${insp.plans?.find((x) => x.id === p.planId)?.name ?? 'Plan'}“`} chevron={false} />
+            : <Row title="Koordinaten" value={p.position ? formatCoord(p.position) : 'nicht verortet'} chevron={false} />}
           <Row title="Genauigkeit" value={p.source === 'gps' ? acc.text : p.source === 'voice' ? 'geschätzt' : 'manuell'} chevron={false} />
           <Row title="Quelle" value={SOURCE[p.source]} chevron={false} />
           {segs.length > 0 && <Row title="Abschnitt" value={segs.map((s) => s.name).join(', ')} chevron={false} />}
@@ -125,7 +127,7 @@ export default function PointSheet() {
 
         {canEdit && (
           <div className="list">
-            <Row icon={<Navigation size={16} />} iconBg="#0a84ff" title="Auf aktuelle GPS-Position setzen" onClick={toGps} />
+            {!p.planId && <Row icon={<Navigation size={16} />} iconBg="#0a84ff" title="Auf aktuelle GPS-Position setzen" onClick={toGps} />}
             {p.kind === 'route' && (
               <Row icon={<PenLine size={16} />} iconBg="#34c759" title="Ab hier weiterzeichnen" sub="Neue Punkte werden hier angehängt" onClick={() => {
                 mutate((d) => { const s = segmentEndingAt(d, p.id) ?? branchFrom(d, p.id); d.activeSegmentId = s.id; });

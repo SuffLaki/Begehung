@@ -5,7 +5,9 @@ import { navigate } from '../../router';
 import { Banner, Nav, Row, SyncPill, fmtTime } from '../../ui/kit';
 import { ActionBar, GpsLine, RecorderCard, UndoRedo } from './parts';
 import { StatusBadge } from '../common';
-import { formatDistance, routeLength } from '../../geo/geo';
+import { formatDistance, hasUnscaledLength, routeLength } from '../../geo/geo';
+import { activePlan } from '../../plans/plans';
+import { FileImage } from 'lucide-react';
 import { formatDate } from '../../pdf/generator';
 import { pointDisplayName } from '../../model/factory';
 import { useUi } from './actions';
@@ -67,11 +69,16 @@ export default function OverviewTab() {
           )}
 
           {!completed && <ActionBar />}
-          {!completed && <GpsLine />}
-          {!completed && <RecorderCard />}
+          {!completed && activePlan(insp) && (
+            <Banner kind="info" icon={<FileImage size={20} />} onClick={() => useUi.getState().set({ basemapOpen: true })}>
+              <b>Plan als Grundlage:</b> {activePlan(insp)!.name}. Punkte und Linien auf dem Plan antippen – GPS wird dort nicht eingezeichnet.
+            </Banner>
+          )}
+          {!completed && !activePlan(insp) && <GpsLine />}
+          {!completed && !activePlan(insp) && <RecorderCard />}
 
           <div className="stats">
-            <div className="stat"><b>{formatDistance(routeLength(insp.route))}</b><span>Trasse</span></div>
+            <div className="stat"><b>{hasUnscaledLength(insp.route, insp.plans) && !routeLength(insp.route, insp.plans) ? '–' : formatDistance(routeLength(insp.route, insp.plans))}</b><span>{hasUnscaledLength(insp.route, insp.plans) ? 'Trasse*' : 'Trasse'}</span></div>
             <div className="stat"><b>{routePts.length}</b><span>Punkte</span></div>
             <div className="stat"><b>{insp.photos.length}</b><span>Fotos</span></div>
             <div className="stat"><b>{insp.notes.length}</b><span>Notizen</span></div>

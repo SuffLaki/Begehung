@@ -11,6 +11,7 @@ import { listTemplates } from '../storage/db';
 import { MAP_TYPES } from '../map/providers';
 import RouteMap from '../map/RouteMap';
 import { contentBounds, frameBounds } from '../map/staticMap';
+import { activePlan } from '../plans/plans';
 import { MAP_ASPECT } from '../pdf/generator';
 import { TemplateThumb, createTemplateFromFile } from './Templates';
 import { pickFile } from '../camera/photo';
@@ -32,8 +33,10 @@ export default function PdfWizard({ id }: { id: string }) {
   const ps = insp.pdfSettings;
   const setPs = (fn: (p: PdfSettings) => void) => useInspection.getState().mutate((d) => fn(d.pdfSettings), { undoable: false });
   const tplId = templates.some((t) => t.id === ps.templateId) ? ps.templateId : templates[0]?.id;
-  const cb = contentBounds(insp);
-  const autoFrame = cb ? frameBounds(cb, MAP_ASPECT) : null;
+  const plan = activePlan(insp);
+  const cb = plan ? null : contentBounds(insp);
+  // Plan: ganzer Plan; Karte: auf die Trasse eingepasst
+  const autoFrame = plan ? { south: -plan.height, west: 0, north: 0, east: plan.width } : cb ? frameBounds(cb, MAP_ASPECT) : null;
   const autoPoints = insp.route.points.filter((p) => !p.confirmed).length;
   const autoNotes = insp.notes.filter((n) => !n.confirmed).length;
 
@@ -92,14 +95,15 @@ export default function PdfWizard({ id }: { id: string }) {
 
         {inc.map && (
           <>
-            <div className="group-title">Karte im PDF</div>
+            <div className="group-title">{plan ? `Plan im PDF: ${plan.name}` : 'Karte im PDF'}</div>
             <div className="stack">
-              <Seg<MapType> value={ps.mapType} onChange={(v) => setPs((p) => { p.mapType = v; })} options={(Object.keys(MAP_TYPES) as MapType[]).map((k) => ({ value: k, label: MAP_TYPES[k].label }))} />
+              {!plan && <Seg<MapType> value={ps.mapType} onChange={(v) => setPs((p) => { p.mapType = v; })} options={(Object.keys(MAP_TYPES) as MapType[]).map((k) => ({ value: k, label: MAP_TYPES[k].label }))} />}
               {autoFrame ? (
                 <>
                   <div className="frame-map">
                     <RouteMap
-                      key={mapKey}
+                      key={`${mapKey}-${plan?.id ?? 'map'}`}
+                      plan={plan ? { id: plan.id, width: plan.width, height: plan.height } : null}
                       viewKey={`pdf-${insp.id}-${mapKey}`}
                       insp={insp}
                       mapType={ps.mapType}
@@ -125,7 +129,7 @@ export default function PdfWizard({ id }: { id: string }) {
                     />
                   </div>
                   <div className="hstack">
-                    <div className="small muted grow">{ps.mapView ? 'Eigener Ausschnitt – so erscheint die Karte im PDF.' : 'Automatisch eingepasst. Verschieben/zoomen, um den Ausschnitt festzulegen.'}</div>
+                    <div className="small muted grow">{ps.mapView ? `Eigener Ausschnitt – so erscheint ${plan ? 'der Plan' : 'die Karte'} im PDF.` : plan ? 'Ganzer Plan. Zoomen/verschieben, um einen Ausschnitt festzulegen.' : 'Automatisch eingepasst. Verschieben/zoomen, um den Ausschnitt festzulegen.'}</div>
                     {ps.mapView && <button className="btn sm" onClick={() => { setPs((p) => { p.mapView = null; }); mountedAt.current = Date.now(); setMapKey((k) => k + 1); }}><Maximize size={16} />Automatisch</button>}
                   </div>
                 </>

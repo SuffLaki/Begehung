@@ -220,7 +220,7 @@ export function applyLegs(d: Inspection, legs: RouteLeg[], startPointId: string 
     const seg = segmentEndingAt(d, startPointId) ?? branchFrom(d, startPointId);
     d.activeSegmentId = seg.id;
   } else if (startFix) {
-    const sp = addRoutePoint(d, startFix, { source: 'gps', title: 'Startpunkt (GPS)' });
+    const sp = addRoutePoint(d, startFix, { source: 'gps', title: 'Startpunkt (GPS)', planId: null });
     created.push(sp);
     prevPos = startFix;
     prevId = sp.id;

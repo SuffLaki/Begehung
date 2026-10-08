@@ -105,6 +105,18 @@ markiert. Fehlt Richtung oder Entfernung, wird **keine** Position erfunden – d
   Zusammenfassungen kommen nur bestätigt ins PDF.
 * Datenschutz: Fotos/Audio nur nach Freigabe in den Einstellungen; GPS-Koordinaten werden nie an die KI gesendet.
 
+## Pläne statt Landkarte
+
+* `Inspection.plans` (PlanSheet: Größe, Maßstab) + Bilddaten im IndexedDB-Store `plans`; `Inspection.basemap` = Landkarte oder Plan.
+* Import (`screens/inspection/BasemapSheet.tsx`, `plans/plans.ts`): PDF (Seite wählbar, mit pdf.js in max. 4096 px gerendert)
+  oder Bild. Maßstab: „1:x“ (nur PDF, Papiergröße bekannt) oder „Strecke messen“ (zwei Punkte + Meter).
+* Planpunkte haben `planId`, Position in Planpixeln (`lng = x`, `lat = −y`, Leaflet `CRS.Simple`). Die Karte
+  (`RouteMap`) zeigt je Grundlage nur deren Punkte; Linien zwischen Karte und Plan werden nie gemischt.
+* Kein GPS-Bezug: GPS-Punkte, Aufzeichnung, Adresssuche und Richtungsangaben sind im Planmodus aus (mit Hinweis);
+  Fotos werden über den Trassenpunkt zugeordnet. Längen nur mit Maßstab (`segmentLength` → sonst null).
+* PDF: eine Übersichtsseite je Grundlage mit Inhalt (Landkarte und jeder benutzte Plan), Plan als Hintergrund
+  (`renderPlanMap`), Maßstabsleiste nur mit Maßstab. Sicherungen enthalten die Planbilder.
+
 ## Straßen, Hausnummern, Kreuzungen (Adresssuche)
 
 * `places/placeParser.ts` erkennt im Text Straßennamen (Endungen wie -straße, -weg, -gasse … sowie „Am …“, „Neue Straße“),

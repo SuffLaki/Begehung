@@ -4,14 +4,14 @@
 // Aufgaben, Unterschrift). Seitenzahlen/Kopfzeilen werden am Ende ergänzt.
 
 import { PDFDocument, rgb, type PDFImage } from 'pdf-lib';
-import type { Inspection, Note, PdfTemplate, PhotoMeta, RoutePoint, Settings } from '../model/types';
+import type { Inspection, Note, PdfTemplate, PhotoMeta, PlanSheet, RoutePoint, Settings } from '../model/types';
 import { Layout, MM, C, hex, san } from './layout';
 import { endpoints, isRelevantPoint, orderedPoints } from '../geo/routeOps';
-import { formatDistance, pathLength, routeLength, segmentPositions } from '../geo/geo';
+import { formatDistance, hasUnscaledLength, routeLength, segmentLength, segmentPlanId } from '../geo/geo';
 import { pointDisplayName } from '../model/factory';
 import { getPhotoBlob } from '../storage/db';
 import { canvasToBlob, loadImage, scaleToCanvas } from '../camera/photo';
-import { renderStaticMap } from '../map/staticMap';
+import { contentBounds, renderPlanMap, renderStaticMap } from '../map/staticMap';
 import { drawAnnotations, legendText } from '../annotate/lines';
 
 export const MAP_ASPECT = 4 / 3;
@@ -159,7 +159,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
     }
     // Kennzahlen
     const stats: [string, string][] = [
-      ['Trassenlänge', formatDistance(routeLength(insp.route))],
+      ['Trassenlänge', formatDistance(routeLength(insp.route, insp.plans)) + (hasUnscaledLength(insp.route, insp.plans) ? '*' : '')],
       ['Wegpunkte', String(insp.route.points.filter((p) => p.kind === 'route').length)],
       ['Fotos', String(insp.photos.length)],
       ['Offene Punkte', String(insp.notes.filter((n) => n.status === 'open').length)],
@@ -192,15 +192,25 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
     }
   }
 
-  // ==================================================== Karte
+  // ==================================================== Karte / Pläne
   if (ps.include.map) {
-    onProgress('Karte …');
-    const map = await renderStaticMap(insp, ps, MAP_ASPECT, onProgress);
-    if (!map) {
-      warnings.push('Keine Kartenseite: Es sind noch keine verorteten Punkte vorhanden.');
-    } else {
+    // eine Übersichtsseite je Grundlage mit Inhalt: Landkarte und jeder benutzte Plan
+    const activePlanId = insp.basemap?.kind === 'plan' ? insp.basemap.planId : null;
+    const spaces: (PlanSheet | null)[] = [];
+    if (contentBounds(insp)) spaces.push(null);
+    for (const plan of insp.plans ?? []) {
+      if (plan.id === activePlanId || insp.route.points.some((p) => p.planId === plan.id)) spaces.push(plan);
+    }
+    if (!spaces.length) warnings.push('Keine Kartenseite: Es sind noch keine verorteten Punkte vorhanden.');
+    for (const plan of spaces) {
+      onProgress(plan ? `Plan „${plan.name}“ …` : 'Karte …');
+      const spaceId = plan?.id ?? null;
+      const map = plan
+        ? await renderPlanMap(insp, plan, ps, MAP_ASPECT, plan.id === activePlanId ? ps.mapView : null)
+        : await renderStaticMap(insp, activePlanId ? { ...ps, mapView: null } : ps, MAP_ASPECT, onProgress);
+      if (!map) { if (plan) warnings.push(`Plan „${plan.name}“ konnte nicht geladen werden.`); continue; }
       L.newPage(false);
-      L.heading('Übersichtskarte');
+      L.heading(plan ? `Übersichtsplan: ${plan.name}` : 'Übersichtskarte');
       const img = await doc.embedJpg(map.jpeg);
       let w = L.width;
       let h = w / MAP_ASPECT;
@@ -212,17 +222,18 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
       if (!map.tilesOk) warnings.push('Kartenhintergrund war nicht verfügbar (offline?) – die Karte zeigt nur die Trassengeometrie.');
 
       // Legende
+      const segs = insp.route.segments.filter((sg) => sg.pointIds.length >= 2 && segmentPlanId(insp.route, sg) === spaceId);
       L.text('Legende', { size: 9, font: L.bold, after: 3 });
-      for (const seg of insp.route.segments) {
-        if (seg.pointIds.length < 2) continue;
+      for (const seg of segs) {
         L.ensure(14);
         L.y -= 12;
         const c = ps.colored ? hex(seg.color) : rgb(0.07, 0.07, 0.07);
         L.page.drawRectangle({ x: L.left, y: L.y + 2, width: 22, height: 4, color: c });
-        L.at(`${seg.name} – ${formatDistance(pathLength(segmentPositions(insp.route, seg.pointIds)))}, ${seg.pointIds.length} Punkte`, L.left + 30, L.y, 8.5);
+        const len = segmentLength(insp.route, seg, insp.plans);
+        L.at(`${seg.name}${len !== null ? ` – ${formatDistance(len)}` : ''}, ${seg.pointIds.length} Punkte`, L.left + 30, L.y, 8.5);
       }
       // Bedeutung der Farben (Linienarten)
-      const usedTypes = [...new Set(insp.route.segments.map((s) => s.lineType).filter(Boolean))] as string[];
+      const usedTypes = [...new Set(segs.map((sg) => sg.lineType).filter(Boolean))] as string[];
       if (usedTypes.length && ps.colored) {
         L.y -= 4;
         const parts = usedTypes.map((k) => settings.lineTypes.find((t) => t.key === k)).filter(Boolean);
@@ -253,7 +264,11 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
         L.at(lbl, x + 28, y, 8.5, L.font, C.text, colW - 30);
       });
       L.y -= 12 + Math.ceil(items.length / 3) * 14 + 6;
-      L.text(`Koordinaten: WGS84. Positionen stammen aus dem GPS des Smartphones (Genauigkeit je Punkt angegeben), manueller Platzierung oder Sprachbeschreibung (geschätzt) – keine Vermessung.${map.attribution ? ` Kartengrundlage: ${map.attribution}.` : ''}`, { size: 7.5, color: C.muted });
+      if (plan) {
+        L.text(`Eintragungen auf dem Plan „${plan.fileName}“ (manuell gesetzt, kein GPS-Bezug).${plan.metersPerPx ? ` Maßstab: ${plan.scaleNote || 'aus Planstrecke ermittelt'}.` : ' Ohne Maßstabsangabe – keine Längen.'}`, { size: 7.5, color: C.muted });
+      } else {
+        L.text(`Koordinaten: WGS84. Positionen stammen aus dem GPS des Smartphones (Genauigkeit je Punkt angegeben), manueller Platzierung oder Sprachbeschreibung (geschätzt) – keine Vermessung.${map.attribution ? ` Kartengrundlage: ${map.attribution}.` : ''}`, { size: 7.5, color: C.muted });
+      }
     }
   }
 
@@ -277,7 +292,9 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
       L.y -= barH + 4;
       if (!p.confirmed) L.text('Automatisch ermittelt – Lage geschätzt, nicht bestätigt.', { size: 8.5, font: L.bold, color: C.warn, after: 2 });
       L.kv([
-        ['Koordinaten (WGS84)', p.position ? `${coord(p.position.lat, p.position.lng)}${p.accuracy ? `  (±${Math.round(p.accuracy)} m)` : ''}` : 'nicht verortet'],
+        p.planId
+          ? ['Lage', `auf Plan „${insp.plans?.find((x) => x.id === p.planId)?.name ?? 'Plan'}“`]
+          : ['Koordinaten (WGS84)', p.position ? `${coord(p.position.lat, p.position.lng)}${p.accuracy ? `  (±${Math.round(p.accuracy)} m)` : ''}` : 'nicht verortet'],
         ['Station', p.station],
         ['Abschnitt', seg?.name ?? (p.kind === 'marker' ? 'Markierung' : '')],
         ['Quelle', SOURCE_LABEL[p.source]],
@@ -329,7 +346,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
   }
 
   // ==================================================== Koordinatenliste
-  const located = pointsInOrder.filter((p) => p.position);
+  const located = pointsInOrder.filter((p) => p.position && !p.planId);
   if (ps.include.coordTable && located.length) {
     L.newPage(false);
     L.heading('Koordinatenliste');

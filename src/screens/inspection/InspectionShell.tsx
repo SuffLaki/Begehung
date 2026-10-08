@@ -18,6 +18,7 @@ import NoteSheet from './NoteSheet';
 import VoiceSheet from './VoiceSheet';
 import SegmentsSheet from './SegmentsSheet';
 import AnnotateSheet from './AnnotateSheet';
+import BasemapSheet from './BasemapSheet';
 
 const TABS = [
   { id: 'overview', label: 'Begehung', icon: ClipboardList },
@@ -92,6 +93,7 @@ export default function InspectionShell({ id, tab }: { id: string; tab: string }
       <VoiceSheet />
       <SegmentsSheet />
       <AnnotateSheet />
+      <BasemapSheet />
     </div>
   );
 }

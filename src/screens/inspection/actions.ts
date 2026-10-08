@@ -8,6 +8,9 @@ import { currentFix, fixIfAvailable } from '../../geo/gps';
 import { addRoutePoint } from '../../geo/routeOps';
 import { addPhotos, pickImages } from '../../camera/photo';
 import { pointDisplayName } from '../../model/factory';
+import type { MapTool } from '../../map/RouteMap';
+import { activePlan } from '../../plans/plans';
+import { navigate } from '../../router';
 
 export type VoiceMode = 'note' | 'route';
 
@@ -22,6 +25,10 @@ interface UiState {
   voice: { mode: VoiceMode; text?: string } | null;
   segmentsOpen: boolean;
   recorderOpen: boolean;
+  /** Kartengrundlage / Plan-Verwaltung offen */
+  basemapOpen: boolean;
+  /** Werkzeug, das der Karten-Tab beim Öffnen aktivieren soll */
+  mapTool: MapTool | null;
   set(p: Partial<UiState>): void;
 }
 
@@ -34,15 +41,25 @@ export const useUi = create<UiState>((set) => ({
   voice: null,
   segmentsOpen: false,
   recorderOpen: false,
+  basemapOpen: false,
+  mapTool: null,
   set: (p) => set(p),
 }));
 
 export function resetUi() {
-  useUi.setState({ pointId: null, photoId: null, annotateId: null, noteId: null, notePrefill: null, voice: null, segmentsOpen: false, recorderOpen: false });
+  useUi.setState({ pointId: null, photoId: null, annotateId: null, noteId: null, notePrefill: null, voice: null, segmentsOpen: false, recorderOpen: false, basemapOpen: false, mapTool: null });
 }
 
 /** 📍 Aktuelle GPS-Position als nächsten Trassenpunkt setzen */
 export async function actionLocation() {
+  // Auf einem Plan gibt es keinen GPS-Bezug → Punkt auf dem Plan antippen
+  const insp = useInspection.getState().insp;
+  if (insp && activePlan(insp)) {
+    useUi.getState().set({ mapTool: 'addPoint' });
+    navigate(`/i/${insp.id}/map`, true);
+    toast('Plan als Grundlage: Punkt auf dem Plan antippen.');
+    return;
+  }
   const maxAcc = useApp.getState().settings.gps.maxAccuracyM;
   let fix;
   try {
@@ -63,7 +80,7 @@ export async function actionLocation() {
   let label = '';
   let id = '';
   useInspection.getState().mutate((d) => {
-    const p = addRoutePoint(d, fix, { source: 'gps', accuracy: fix.accuracy });
+    const p = addRoutePoint(d, fix, { source: 'gps', accuracy: fix.accuracy, planId: null });
     label = pointDisplayName(p);
     id = p.id;
   });

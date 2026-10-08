@@ -12,6 +12,7 @@ import { Field, Loading, Nav, SwitchRow, Spinner } from '../ui/kit';
 import { currentFix, gpsSupported } from '../geo/gps';
 import { addRoutePoint } from '../geo/routeOps';
 import { canEditInspection } from '../model/permissions';
+import { useUi } from './inspection/actions';
 
 export default function InspectionForm({ editId }: { editId?: string }) {
   const settings = useApp((s) => s.settings);
@@ -19,6 +20,7 @@ export default function InspectionForm({ editId }: { editId?: string }) {
   const [meta, setMeta] = useState<InspectionMeta | null>(editId ? null : { ...emptyMeta(), inspector: settings.user.name });
   const [projects, setProjects] = useState<Project[]>([]);
   const [useGpsStart, setUseGpsStart] = useState(gpsSupported());
+  const [usePlan, setUsePlan] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
 
@@ -75,7 +77,7 @@ export default function InspectionForm({ editId }: { editId?: string }) {
         return;
       }
       const insp = newInspection(m, projectId, settings.user, settings.defaultTemplateId, settings.defaultMapType);
-      if (useGpsStart) {
+      if (useGpsStart && !usePlan) {
         try {
           const fix = await currentFix(30000, 15000);
           const p = addRoutePoint(insp, fix, { source: 'gps', accuracy: fix.accuracy, title: m.startPoint || 'Startpunkt' });
@@ -89,6 +91,7 @@ export default function InspectionForm({ editId }: { editId?: string }) {
         void useApp.getState().updateSettings((s) => { s.user.name = m.inspector; });
       }
       navigate(`/i/${insp.id}/map`, true);
+      if (usePlan) window.setTimeout(() => useUi.getState().set({ basemapOpen: true }), 300);
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -126,10 +129,11 @@ export default function InspectionForm({ editId }: { editId?: string }) {
           <Field label="Baustelle / Bereich" value={meta.site} onChange={set('site')} readOnly={readOnly} />
           <Field label="Startpunkt (Beschreibung)" value={meta.startPoint} onChange={set('startPoint')} placeholder="z. B. UW Ulm-Nord, Tor 2" readOnly={readOnly} />
         </div>
-        {!editId && gpsSupported() && (
+        {!editId && (
           <>
             <div className="list" style={{ marginTop: 12 }}>
-              <SwitchRow title="GPS-Standort als Startpunkt" sub="Setzt den ersten Trassenpunkt an deine aktuelle Position" checked={useGpsStart} onChange={setUseGpsStart} />
+              <SwitchRow title="Plan statt Karte verwenden" sub="Vorhandenen Lageplan (PDF/Bild) einfügen und darauf arbeiten" checked={usePlan} onChange={setUsePlan} />
+              {!usePlan && gpsSupported() && <SwitchRow title="GPS-Standort als Startpunkt" sub="Setzt den ersten Trassenpunkt an deine aktuelle Position" checked={useGpsStart} onChange={setUseGpsStart} />}
             </div>
             <div className="group-foot hstack"><MapPin size={14} /> Den Startpunkt kannst du später auf der Karte verschieben.</div>
           </>

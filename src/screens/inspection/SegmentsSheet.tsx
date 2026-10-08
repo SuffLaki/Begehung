@@ -4,7 +4,7 @@ import { useInspection } from '../../state/inspectionStore';
 import { confirmDialog, toast } from '../../state/appStore';
 import { SEGMENT_COLORS } from '../../model/factory';
 import { deleteSegment, joinSegments, newEmptySegment, reverseSegment } from '../../geo/routeOps';
-import { formatDistance, pathLength, segmentPositions } from '../../geo/geo';
+import { formatDistance, segmentLength } from '../../geo/geo';
 import { Sheet } from '../../ui/kit';
 import { useUi } from './actions';
 import { useCanEdit } from './parts';
@@ -24,7 +24,7 @@ export default function SegmentsSheet() {
         <div className="small muted">Neue Punkte werden an den <b>aktiven</b> Abschnitt angehängt. Abschnitte können eigene Farben haben, geteilt (am Punkt) und verbunden werden.</div>
         <div className="list">
           {insp.route.segments.map((s) => {
-            const len = pathLength(segmentPositions(insp.route, s.pointIds));
+            const len = segmentLength(insp.route, s, insp.plans);
             const active = s.id === insp.activeSegmentId;
             const expanded = openId === s.id;
             const others = insp.route.segments.filter((o) => o.id !== s.id);
@@ -34,7 +34,7 @@ export default function SegmentsSheet() {
                   <span className="seg-swatch" style={{ background: s.color, width: 28, height: 8 }} />
                   <div className="row-main">
                     <div className="row-title">{s.name}</div>
-                    <div className="row-sub">{s.pointIds.length} Punkte · {formatDistance(len)}{s.source === 'gps' ? ' · GPS' : s.source === 'voice' ? ' · Sprache' : ''}</div>
+                    <div className="row-sub">{s.pointIds.length} Punkte · {len === null ? 'Länge ohne Maßstab unbekannt' : formatDistance(len)}{s.source === 'gps' ? ' · GPS' : s.source === 'voice' ? ' · Sprache' : ''}</div>
                   </div>
                   {active && <span className="badge accent">aktiv</span>}
                 </button>

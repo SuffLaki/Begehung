@@ -4,7 +4,8 @@
 // Sind die Kacheln nicht erreichbar (offline, Gebiet nie angesehen), wird die
 // Trasse auf neutralem Raster gezeichnet und das im Ergebnis gemeldet.
 
-import type { Inspection, MapBounds, PdfSettings } from '../model/types';
+import type { Inspection, MapBounds, PdfSettings, PlanSheet } from '../model/types';
+import { planImage } from '../plans/plans';
 import { MAP_TYPES, attributionOf, tileUrl } from './providers';
 import { endpoints, isRelevantPoint } from '../geo/routeOps';
 import { boundsOf } from '../geo/geo';
@@ -31,7 +32,7 @@ const projY = (lat: number, z: number) => {
 
 export function contentBounds(insp: Inspection): MapBounds | null {
   const pts = [
-    ...insp.route.points.flatMap((p) => (p.position ? [p.position] : [])),
+    ...insp.route.points.flatMap((p) => (p.position && !p.planId ? [p.position] : [])),
     ...insp.photos.flatMap((f) => (f.position ? [f.position] : [])),
   ];
   if (!pts.length) insp.route.tracks.forEach((t) => t.fixes.forEach((f) => pts.push(f)));
@@ -133,93 +134,7 @@ export async function renderStaticMap(insp: Inspection, ps: PdfSettings, aspect:
     label(g, 'Kartenhintergrund nicht verfügbar (offline) – nur Trassengeometrie', 14 * S, 22 * S, S, '#5c6670');
   }
 
-  // ---------------------------------------------- Trasse
-  const byId = new Map(insp.route.points.map((p) => [p.id, p]));
-  const { startIds, endIds } = endpoints(insp);
-  g.lineCap = 'round';
-  g.lineJoin = 'round';
-  for (const seg of insp.route.segments) {
-    const color = ps.colored ? seg.color : '#111111';
-    for (let i = 0; i < seg.pointIds.length - 1; i++) {
-      const a = byId.get(seg.pointIds[i]);
-      const b = byId.get(seg.pointIds[i + 1]);
-      if (!a?.position || !b?.position) continue;
-      const [ax, ay] = toPx(a.position.lat, a.position.lng);
-      const [bx, by] = toPx(b.position.lat, b.position.lng);
-      g.setLineDash([]);
-      g.strokeStyle = 'rgba(255,255,255,0.9)';
-      g.lineWidth = 8 * S;
-      g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
-      g.strokeStyle = color;
-      g.lineWidth = 4.5 * S;
-      g.setLineDash(!a.confirmed || !b.confirmed ? [10 * S, 8 * S] : []);
-      g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
-    }
-  }
-  g.setLineDash([]);
-
-  // ---------------------------------------------- Fotos
-  if (ps.showPhotoMarkers) {
-    for (const f of insp.photos) {
-      const pos = f.position ?? (f.pointId ? byId.get(f.pointId)?.position : null);
-      if (!pos) continue;
-      const [x, y] = toPx(pos.lat, pos.lng);
-      const w = 30 * S, h = 18 * S;
-      roundRect(g, x - w / 2, y - h / 2, w, h, 4 * S, '#1C1C1E', '#FFFFFF', 1.5 * S);
-      g.fillStyle = '#FFFFFF';
-      g.font = `bold ${10 * S}px Helvetica, Arial, sans-serif`;
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText(`F${f.number}`, x, y + 0.5 * S);
-    }
-  }
-
-  // ---------------------------------------------- Punkte
-  for (const p of insp.route.points) {
-    if (!p.position) continue;
-    const [x, y] = toPx(p.position.lat, p.position.lng);
-    const seg = insp.route.segments.find((s) => s.pointIds.includes(p.id));
-    const color = ps.colored ? seg?.color ?? '#FF9F0A' : '#111111';
-    if (p.kind === 'marker') {
-      if (!ps.showMarkers) continue;
-      const r = 10 * S;
-      g.save();
-      g.translate(x, y);
-      g.rotate(Math.PI / 4);
-      roundRect(g, -r, -r, 2 * r, 2 * r, 3 * S, '#FFFFFF', '#1C1C1E', 2 * S);
-      g.restore();
-      g.fillStyle = '#1C1C1E';
-      g.font = `bold ${11 * S}px Helvetica, Arial, sans-serif`;
-      g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(glyphSafe(SYMBOLS[p.symbol]?.glyph ?? '•'), x, y + 0.5 * S);
-      if (ps.showNumbers) label(g, p.label || `M${p.number}`, x + 14 * S, y - 14 * S, S);
-      continue;
-    }
-    const isStart = startIds.has(p.id);
-    const isEnd = endIds.has(p.id);
-    const relevant = isRelevantPoint(insp, p, startIds, endIds);
-    if (!ps.showGpsPoints && !isStart && !isEnd) continue;
-    if (!relevant) {
-      g.beginPath(); g.arc(x, y, 3 * S, 0, Math.PI * 2);
-      g.fillStyle = '#FFFFFF'; g.fill();
-      g.lineWidth = 1.5 * S; g.strokeStyle = color; g.stroke();
-      continue;
-    }
-    const r = (isStart || isEnd ? 10 : 8) * S;
-    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
-    g.fillStyle = isStart ? '#1E8E3E' : isEnd ? '#C5221F' : '#FFFFFF';
-    g.fill();
-    g.lineWidth = 2.5 * S;
-    g.strokeStyle = isStart || isEnd ? '#FFFFFF' : color;
-    if (!p.confirmed) g.setLineDash([3 * S, 2 * S]);
-    g.stroke();
-    g.setLineDash([]);
-    g.fillStyle = isStart || isEnd ? '#FFFFFF' : '#111111';
-    g.font = `bold ${(isStart || isEnd ? 11 : 9) * S}px Helvetica, Arial, sans-serif`;
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(isStart ? 'S' : isEnd ? 'E' : '', x, y + 0.5 * S);
-    if (ps.showNumbers) label(g, p.label || `P${p.number}${p.confirmed ? '' : ' ?'}`, x + r + 3 * S, y - r - 2 * S, S);
-  }
+  drawOverlay(g, insp, ps, toPx, S, null);
 
   // ---------------------------------------------- Maßstab, Nordpfeil, Quelle
   const midLat = (raw.south + raw.north) / 2;
@@ -286,4 +201,154 @@ function label(g: CanvasRenderingContext2D, text: string, x: number, y: number, 
 
 function glyphSafe(s: string): string {
   return s === '♣' ? 'B' : s === '⚡' ? 'L' : s === '≈' ? '~' : s;
+}
+
+/** Trasse, Fotos, Punkte und Markierungen einer Grundlage (Karte oder Plan) zeichnen */
+function drawOverlay(g: CanvasRenderingContext2D, insp: Inspection, ps: PdfSettings, toPx: (lat: number, lng: number) => [number, number], S: number, space: string | null) {
+  // ---------------------------------------------- Trasse
+  const byId = new Map(insp.route.points.filter((p) => (p.planId ?? null) === space).map((p) => [p.id, p]));
+  const { startIds, endIds } = endpoints(insp);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  for (const seg of insp.route.segments) {
+    const color = ps.colored ? seg.color : '#111111';
+    for (let i = 0; i < seg.pointIds.length - 1; i++) {
+      const a = byId.get(seg.pointIds[i]);
+      const b = byId.get(seg.pointIds[i + 1]);
+      if (!a?.position || !b?.position) continue;
+      const [ax, ay] = toPx(a.position.lat, a.position.lng);
+      const [bx, by] = toPx(b.position.lat, b.position.lng);
+      g.setLineDash([]);
+      g.strokeStyle = 'rgba(255,255,255,0.9)';
+      g.lineWidth = 8 * S;
+      g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+      g.strokeStyle = color;
+      g.lineWidth = 4.5 * S;
+      g.setLineDash(!a.confirmed || !b.confirmed ? [10 * S, 8 * S] : []);
+      g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+    }
+  }
+  g.setLineDash([]);
+
+  // ---------------------------------------------- Fotos
+  if (ps.showPhotoMarkers) {
+    for (const f of insp.photos) {
+      const pos = space ? (f.pointId ? byId.get(f.pointId)?.position : null) : f.position ?? (f.pointId ? byId.get(f.pointId)?.position : null);
+      if (!pos) continue;
+      const [x, y] = toPx(pos.lat, pos.lng);
+      const w = 30 * S, h = 18 * S;
+      roundRect(g, x - w / 2, y - h / 2, w, h, 4 * S, '#1C1C1E', '#FFFFFF', 1.5 * S);
+      g.fillStyle = '#FFFFFF';
+      g.font = `bold ${10 * S}px Helvetica, Arial, sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(`F${f.number}`, x, y + 0.5 * S);
+    }
+  }
+
+  // ---------------------------------------------- Punkte
+  for (const p of byId.values()) {
+    if (!p.position) continue;
+    const [x, y] = toPx(p.position.lat, p.position.lng);
+    const seg = insp.route.segments.find((s) => s.pointIds.includes(p.id));
+    const color = ps.colored ? seg?.color ?? '#FF9F0A' : '#111111';
+    if (p.kind === 'marker') {
+      if (!ps.showMarkers) continue;
+      const r = 10 * S;
+      g.save();
+      g.translate(x, y);
+      g.rotate(Math.PI / 4);
+      roundRect(g, -r, -r, 2 * r, 2 * r, 3 * S, '#FFFFFF', '#1C1C1E', 2 * S);
+      g.restore();
+      g.fillStyle = '#1C1C1E';
+      g.font = `bold ${11 * S}px Helvetica, Arial, sans-serif`;
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(glyphSafe(SYMBOLS[p.symbol]?.glyph ?? '•'), x, y + 0.5 * S);
+      if (ps.showNumbers) label(g, p.label || `M${p.number}`, x + 14 * S, y - 14 * S, S);
+      continue;
+    }
+    const isStart = startIds.has(p.id);
+    const isEnd = endIds.has(p.id);
+    const relevant = isRelevantPoint(insp, p, startIds, endIds);
+    if (!ps.showGpsPoints && !isStart && !isEnd) continue;
+    if (!relevant) {
+      g.beginPath(); g.arc(x, y, 3 * S, 0, Math.PI * 2);
+      g.fillStyle = '#FFFFFF'; g.fill();
+      g.lineWidth = 1.5 * S; g.strokeStyle = color; g.stroke();
+      continue;
+    }
+    const r = (isStart || isEnd ? 10 : 8) * S;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
+    g.fillStyle = isStart ? '#1E8E3E' : isEnd ? '#C5221F' : '#FFFFFF';
+    g.fill();
+    g.lineWidth = 2.5 * S;
+    g.strokeStyle = isStart || isEnd ? '#FFFFFF' : color;
+    if (!p.confirmed) g.setLineDash([3 * S, 2 * S]);
+    g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = isStart || isEnd ? '#FFFFFF' : '#111111';
+    g.font = `bold ${(isStart || isEnd ? 11 : 9) * S}px Helvetica, Arial, sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(isStart ? 'S' : isEnd ? 'E' : '', x, y + 0.5 * S);
+    if (ps.showNumbers) label(g, p.label || `P${p.number}${p.confirmed ? '' : ' ?'}`, x + r + 3 * S, y - r - 2 * S, S);
+  }
+
+}
+
+/** Inhaltsbereich auf einem Plan (Planpixel), null = keine Punkte */
+export function planContentBounds(insp: Inspection, planId: string): MapBounds | null {
+  return boundsOf(insp.route.points.filter((p) => p.planId === planId && p.position).map((p) => p.position!));
+}
+
+/**
+ * Übersicht auf Basis eines Plans: Planbild als Hintergrund, Eintragungen darüber.
+ * Ausschnitt: gewählter Ausschnitt, sonst ganzer Plan.
+ */
+export async function renderPlanMap(insp: Inspection, plan: PlanSheet, ps: PdfSettings, aspect: number, view: MapBounds | null): Promise<StaticMapResult | null> {
+  const img = await planImage(plan.id);
+  if (!img) return null;
+  const CW = 2400;
+  const CH = Math.round(CW / aspect);
+  const S = CW / 900;
+  // Ausschnitt in Planpixeln (x = lng, y = −lat)
+  let x0 = view ? view.west : 0;
+  let x1 = view ? view.east : plan.width;
+  let y0 = view ? -view.north : 0;
+  let y1 = view ? -view.south : plan.height;
+  // auf das Seitenverhältnis bringen (zentriert)
+  if ((x1 - x0) / (y1 - y0) > aspect) {
+    const h = (x1 - x0) / aspect, cy = (y0 + y1) / 2;
+    y0 = cy - h / 2; y1 = cy + h / 2;
+  } else {
+    const w = (y1 - y0) * aspect, cx = (x0 + x1) / 2;
+    x0 = cx - w / 2; x1 = cx + w / 2;
+  }
+  const k = CW / (x1 - x0);
+  const canvas = document.createElement('canvas');
+  canvas.width = CW;
+  canvas.height = CH;
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = '#FFFFFF';
+  g.fillRect(0, 0, CW, CH);
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, -x0 * k, -y0 * k, plan.width * k, plan.height * k);
+  const toPx = (lat: number, lng: number): [number, number] => [(lng - x0) * k, (-lat - y0) * k];
+  drawOverlay(g, insp, ps, toPx, S, plan.id);
+
+  // Maßstabsleiste nur mit bekanntem Maßstab
+  const mpp = plan.metersPerPx ? plan.metersPerPx / k : 0;
+  if (mpp) {
+    const target = CW * 0.18 * mpp;
+    const nice = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000].reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
+    const barPx = nice / mpp;
+    const bx = 14 * S, by = CH - 16 * S;
+    roundRect(g, bx - 6 * S, by - 20 * S, barPx + 12 * S, 28 * S, 4 * S, 'rgba(255,255,255,0.88)', null, 0);
+    g.fillStyle = '#111';
+    g.fillRect(bx, by - 3 * S, barPx, 4 * S);
+    g.font = `bold ${10 * S}px Helvetica, Arial, sans-serif`;
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillText(nice >= 1000 ? `${nice / 1000} km` : `${nice} m`, bx, by - 8 * S);
+  }
+  const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('Planbild konnte nicht erzeugt werden.'))), 'image/jpeg', 0.9));
+  return { jpeg: new Uint8Array(await blob.arrayBuffer()), width: CW, height: CH, tilesOk: true, attribution: `Plangrundlage: ${plan.fileName}`, mpp };
 }

@@ -3,14 +3,16 @@
 // Bearbeitungsmodus: Punkte ziehen, Punkte/Markierungen setzen, in Linien
 // einfügen (Linie antippen), Abschnitte verwalten, Undo/Redo.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Layers, LocateFixed, Maximize, Pencil, Check, MapPinPlus, Diamond, Spline, ListOrdered, Undo2, Redo2, Camera, Mic, MapPin, PencilLine, Crosshair, Pause, Play, Square, X } from 'lucide-react';
 import RouteMap, { type MapTool } from '../../map/RouteMap';
 import { useInspection } from '../../state/inspectionStore';
 import { useApp, toast } from '../../state/appStore';
 import { useGps, useRecorder, pauseRecording, resumeRecording, stopRecording, startGps } from '../../geo/gps';
 import { addMarker, addRoutePoint, insertPointOnLine, movePoint, renumber } from '../../geo/routeOps';
-import { formatDistance, pathLength, routeLength } from '../../geo/geo';
+import { formatDistance, hasUnscaledLength, pathLength, planDistance, routeLength } from '../../geo/geo';
+import { activePlan } from '../../plans/plans';
+import { FileImage } from 'lucide-react';
 import { pointDisplayName } from '../../model/factory';
 import type { LatLng, MapType } from '../../model/types';
 import { Seg, Sheet, SwitchRow, fmtDuration } from '../../ui/kit';
@@ -35,6 +37,20 @@ export default function MapTab() {
   const [layersOpen, setLayersOpen] = useState(false);
   const [showPhotos, setShowPhotos] = useState(true);
   const [showTracks, setShowTracks] = useState(true);
+  const [measure, setMeasure] = useState<LatLng[]>([]);
+  const [measureM, setMeasureM] = useState('');
+  const plan = activePlan(insp);
+
+  // Werkzeug aus anderer Ansicht übernehmen (z. B. „Standort“ auf einem Plan → Punkt antippen)
+  useEffect(() => {
+    const t = useUi.getState().mapTool;
+    if (t) {
+      setEditMode(true);
+      setTool(t);
+      setMeasure([]);
+      useUi.getState().set({ mapTool: null });
+    }
+  }, [ui.mapTool]);
 
   const mutate = useInspection.getState().mutate;
   const unplaced = insp.route.points.filter((p) => !p.position);
@@ -52,6 +68,12 @@ export default function MapTab() {
 
   function onTapMap(p: LatLng) {
     if (!canEdit) return;
+    // auf einem Plan nur innerhalb des Plans
+    if (plan && (p.lng < 0 || p.lng > plan.width || p.lat > 0 || p.lat < -plan.height)) return;
+    if (tool === 'measure') {
+      setMeasure((m) => (m.length >= 2 ? [p] : [...m, p]));
+      return;
+    }
     if (tool === 'addPoint') {
       mutate((d) => { addRoutePoint(d, p, { source: 'manual' }); });
     } else if (tool === 'addMarker') {
@@ -86,12 +108,16 @@ export default function MapTab() {
   const hint = !editMode ? null
     : tool === 'addPoint' ? <>Tippe auf die Karte, um an <b>{active?.name}</b> anzuhängen – oder auf eine Linie, um einen Punkt einzufügen.</>
     : tool === 'addMarker' ? <>Tippe auf die Karte, um eine Markierung zu setzen.</>
+    : tool === 'measure' ? <>{measure.length === 0 ? 'Ersten Punkt einer bekannten Strecke antippen.' : measure.length === 1 ? 'Zweiten Punkt antippen.' : 'Länge eingeben.'}</>
     : tool === 'place' ? <>Tippe auf die Karte, um <b>{(() => { const p = unplaced.find((x) => x.id === placeId); return p ? `${pointDisplayName(p)}${p.title ? ' – ' + p.title : ''}` : ''; })()}</b> zu platzieren.</>
     : <>Punkte ziehen zum Verschieben · Punkt antippen für Details · Linie antippen = Abschnitt aktiv</>;
 
   return (
     <div className="map-screen">
       <RouteMap
+        key={plan?.id ?? 'map'}
+        plan={plan ? { id: plan.id, width: plan.width, height: plan.height } : null}
+        extraLine={tool === 'measure' ? measure : undefined}
         insp={insp}
         mapType={mapType}
         editMode={editMode && canEdit}
@@ -116,17 +142,18 @@ export default function MapTab() {
           {active && <span className="seg-swatch" style={{ background: active.color }} />}
           <div className="grow" style={{ minWidth: 0 }}>
             <div className="t ellipsis">{insp.meta.projectName || 'Begehung'}</div>
-            <div className="s ellipsis">{formatDistance(routeLength(insp.route))} · {insp.route.points.filter((p) => p.kind === 'route').length} Punkte{editMode && active ? ` · aktiv: ${active.name}` : ''}</div>
+            <div className="s ellipsis">{plan ? `Plan: ${plan.name} · ` : ''}{formatDistance(routeLength(insp.route, insp.plans))}{hasUnscaledLength(insp.route, insp.plans) ? ' (Plan ohne Maßstab)' : ''} · {insp.route.points.filter((p) => p.kind === 'route').length} Punkte{editMode && active ? ` · aktiv: ${active.name}` : ''}</div>
           </div>
         </div>
         <div className="glass map-ctl">
+          <button onClick={() => ui.set({ basemapOpen: true })} aria-label="Plan / Kartengrundlage" className={plan ? 'on' : ''}><FileImage size={22} /></button>
           <button onClick={() => setLayersOpen(true)} aria-label="Kartenansicht"><Layers size={22} /></button>
         </div>
       </div>
 
       <div className="map-right">
         <div className="glass map-ctl">
-          <button aria-label="Auf meinen Standort" onClick={() => { if (gpsFix) setCenterOn({ pos: gpsFix, n: Date.now() }); else void startGps(); }}><LocateFixed size={22} /></button>
+          {!plan && <button aria-label="Auf meinen Standort" onClick={() => { if (gpsFix) setCenterOn({ pos: gpsFix, n: Date.now() }); else void startGps(); }}><LocateFixed size={22} /></button>}
           <button aria-label="Trasse einpassen" onClick={() => setFitSignal((n) => n + 1)}><Maximize size={20} /></button>
         </div>
         {canEdit && (
@@ -175,17 +202,35 @@ export default function MapTab() {
           </>
         ) : canEdit ? (
           <div className="map-actions">
-            <button className="fab sm a-loc" aria-label="Standort als Punkt" onClick={() => void actionLocation()}><MapPin size={24} /></button>
+            <button className="fab sm a-loc" aria-label={plan ? 'Punkt auf Plan setzen' : 'Standort als Punkt'} onClick={() => (plan ? (setEditMode(true), setTool('addPoint')) : void actionLocation())}><MapPin size={24} /></button>
             <button className="fab a-cam" aria-label="Foto" onClick={() => actionPhoto()}><Camera size={28} /></button>
-            <button className="fab a-mic" aria-label="Trasse per Sprache" onClick={() => actionVoice('route')}><Mic size={28} /></button>
+            <button className="fab a-mic" aria-label="Trasse per Sprache" onClick={() => actionVoice(plan ? 'note' : 'route')}><Mic size={28} /></button>
             <button className="fab sm a-note" aria-label="Notiz" onClick={() => actionNote()}><PencilLine size={22} /></button>
           </div>
         ) : null}
       </div>
 
+      <Sheet open={tool === 'measure' && measure.length === 2 && !!plan} onClose={() => setMeasure([])} title="Strecke auf dem Plan">
+        <div className="stack">
+          <div className="list"><div className="field"><label htmlFor="measure-m">Länge der Strecke in Metern</label><input id="measure-m" inputMode="decimal" autoFocus value={measureM} onChange={(e) => setMeasureM(e.target.value)} placeholder="z. B. 25" /></div></div>
+          <button className="btn primary block" onClick={() => {
+            const m = parseFloat(measureM.replace(',', '.'));
+            const px = measure.length === 2 ? planDistance(measure[0], measure[1]) : 0;
+            if (!(m > 0) || px < 5 || !plan) { toast('Bitte eine Länge in Metern eingeben (Punkte nicht zu dicht).', 'error'); return; }
+            mutate((d) => { const p = d.plans?.find((x) => x.id === plan.id); if (p) { p.metersPerPx = m / px; p.scaleNote = `über ${m} m lange Strecke gemessen`; } });
+            toast('Maßstab gespeichert – Längen werden jetzt berechnet.', 'success');
+            setMeasure([]); setMeasureM(''); setTool('none');
+          }}>Maßstab übernehmen</button>
+        </div>
+      </Sheet>
+
       <Sheet open={layersOpen} onClose={() => setLayersOpen(false)} title="Kartenansicht">
         <div className="stack">
-          <Seg<MapType> value={mapType} onChange={setMapType} options={(Object.keys(MAP_TYPES) as MapType[]).map((k) => ({ value: k, label: MAP_TYPES[k].label }))} />
+          <button className="row" style={{ background: 'var(--bg-elev)', borderRadius: 14 }} onClick={() => { setLayersOpen(false); ui.set({ basemapOpen: true }); }}>
+            <div className="row-icon" style={{ background: '#5e5ce6' }}><FileImage size={16} /></div>
+            <div className="row-main"><div className="row-title">Grundlage: {plan ? plan.name : 'Landkarte'}</div><div className="row-sub">Plan einfügen oder wechseln</div></div>
+          </button>
+          {!plan && <Seg<MapType> value={mapType} onChange={setMapType} options={(Object.keys(MAP_TYPES) as MapType[]).map((k) => ({ value: k, label: MAP_TYPES[k].label }))} />}
           <div className="list">
             <SwitchRow title="Fotos anzeigen" checked={showPhotos} onChange={setShowPhotos} />
             <SwitchRow title="GPS-Spuren anzeigen" sub="Rohdaten der Aufzeichnungen (gepunktet)" checked={showTracks} onChange={setShowTracks} />

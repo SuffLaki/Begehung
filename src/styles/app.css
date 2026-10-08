@@ -351,7 +351,7 @@ textarea.input { min-height: 110px; resize: vertical; line-height: 1.4; }
 .map-ctl button + button { border-top: 0.5px solid var(--sep); }
 .map-ctl button.on { color: var(--accent); }
 .map-ctl button:disabled { opacity: 0.35; }
-.map-right { position: absolute; z-index: 500; right: 10px; top: calc(var(--safe-t) + 66px); display: flex; flex-direction: column; gap: 10px; }
+.map-right { position: absolute; z-index: 500; right: 10px; top: calc(var(--safe-t) + 120px); display: flex; flex-direction: column; gap: 10px; }
 .map-title { flex: 1; min-width: 0; padding: 8px 12px; display: flex; align-items: center; gap: 8px; min-height: 46px; }
 .map-title .t { font-weight: 600; font-size: 15px; }
 .map-title .s { font-size: 12px; color: var(--text-3); }

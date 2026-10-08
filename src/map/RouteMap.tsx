@@ -10,8 +10,9 @@ import { MAP_TYPES, MAX_ZOOM } from './providers';
 import { endpoints, isRelevantPoint } from '../geo/routeOps';
 import { pointDisplayName, SYMBOLS } from '../model/factory';
 import { boundsOf } from '../geo/geo';
+import { usePlanUrl } from '../plans/plans';
 
-export type MapTool = 'none' | 'addPoint' | 'addMarker' | 'place';
+export type MapTool = 'none' | 'addPoint' | 'addMarker' | 'place' | 'measure';
 
 interface Props {
   insp: Inspection;
@@ -35,20 +36,35 @@ interface Props {
   viewKey?: string;
   initialBounds?: MapBounds | null;
   onViewChange?(b: MapBounds): void;
+  /**
+   * Plan statt Landkarte (Bild in Planpixeln, Leaflet CRS.Simple). Die Komponente
+   * muss beim Wechsel Karte ↔ Plan neu erzeugt werden (key), weil Leaflet das
+   * Koordinatensystem nicht nachträglich wechseln kann.
+   */
+  plan?: { id: string; width: number; height: number } | null;
+  /** temporäre Hilfslinie (z. B. Strecke messen) */
+  extraLine?: LatLng[];
 }
 
 const views = new Map<string, { center: L.LatLng; zoom: number }>();
 
-function contentPositions(insp: Inspection): LatLng[] {
+function contentPositions(insp: Inspection, planId: string | null): LatLng[] {
   const pts: LatLng[] = [];
-  insp.route.points.forEach((p) => p.position && pts.push(p.position));
-  insp.photos.forEach((f) => f.position && pts.push(f.position));
-  insp.route.tracks.forEach((t) => t.fixes.forEach((f) => pts.push(f)));
+  insp.route.points.forEach((p) => p.position && (p.planId ?? null) === planId && pts.push(p.position));
+  if (!planId) {
+    insp.photos.forEach((f) => f.position && pts.push(f.position));
+    insp.route.tracks.forEach((t) => t.fixes.forEach((f) => pts.push(f)));
+  }
   return pts;
 }
 
-function fit(map: L.Map, insp: Inspection, fallback: GeoFix | null) {
-  const b = boundsOf(contentPositions(insp));
+function fit(map: L.Map, insp: Inspection, fallback: GeoFix | null, plan?: Props['plan']) {
+  if (plan) {
+    // Plan: immer den ganzen Plan zeigen
+    map.fitBounds([[-plan.height, 0], [0, plan.width]], { animate: false });
+    return;
+  }
+  const b = boundsOf(contentPositions(insp, null));
   if (b) {
     if (b.south === b.north && b.west === b.east) map.setView([b.south, b.west], 18);
     else map.fitBounds([[b.south, b.west], [b.north, b.east]], { padding: [48, 48], maxZoom: 19 });
@@ -69,22 +85,33 @@ export default function RouteMap(props: Props) {
   // ------------------------------------------------ Karte anlegen
   useEffect(() => {
     if (!el.current) return;
-    const map = L.map(el.current, {
+    const plan = propsRef.current.plan;
+    const map = L.map(el.current, plan ? {
+      crs: L.CRS.Simple,
+      zoomControl: false,
+      attributionControl: false,
+      minZoom: -6,
+      maxZoom: 4,
+      zoomSnap: 0.25,
+      tapTolerance: 20,
+      maxBounds: [[-plan.height * 1.5, -plan.width * 0.5], [plan.height * 0.5, plan.width * 1.5]],
+    } : {
       zoomControl: false,
       attributionControl: true,
       maxZoom: MAX_ZOOM,
       tapTolerance: 20,
       worldCopyJump: false,
     });
-    map.attributionControl.setPrefix(false);
+    if (!plan) map.attributionControl.setPrefix(false);
     tilesRef.current = L.layerGroup().addTo(map);
     vecRef.current = L.layerGroup().addTo(map);
     gpsRef.current = L.layerGroup().addTo(map);
-    const key = propsRef.current.viewKey ?? propsRef.current.insp.id;
+    const key = `${propsRef.current.viewKey ?? propsRef.current.insp.id}:${plan?.id ?? 'map'}`;
     const saved = views.get(key);
     const ib = propsRef.current.initialBounds;
     if (ib) map.fitBounds([[ib.south, ib.west], [ib.north, ib.east]], { animate: false });
     else if (saved) map.setView(saved.center, saved.zoom);
+    else if (plan) fit(map, propsRef.current.insp, null, plan);
     else {
       map.setView([51.1, 10.4], 6);
       fit(map, propsRef.current.insp, propsRef.current.gpsFix);
@@ -105,11 +132,22 @@ export default function RouteMap(props: Props) {
     };
   }, []);
 
+  // ------------------------------------------------ Plan als Hintergrund
+  const planUrl = usePlanUrl(props.plan?.id);
+  useEffect(() => {
+    const g = tilesRef.current;
+    const plan = props.plan;
+    if (!g || !plan || !planUrl) return;
+    g.clearLayers();
+    L.imageOverlay(planUrl, [[-plan.height, 0], [0, plan.width]], { interactive: false }).addTo(g);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planUrl]);
+
   // ------------------------------------------------ Kartenart
   useEffect(() => {
     const g = tilesRef.current;
     const map = mapRef.current;
-    if (!g || !map) return;
+    if (!g || !map || props.plan) return;
     g.clearLayers();
     const layers = MAP_TYPES[props.mapType].layers;
     const attributions = [...new Set(layers.map((l) => l.attribution))].join(' · ');
@@ -126,7 +164,7 @@ export default function RouteMap(props: Props) {
 
   // ------------------------------------------------ Einpassen / Zentrieren
   useEffect(() => {
-    if (props.fitSignal && mapRef.current) fit(mapRef.current, props.insp, props.gpsFix);
+    if (props.fitSignal && mapRef.current) fit(mapRef.current, props.insp, props.gpsFix, props.plan);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.fitSignal]);
 
@@ -141,9 +179,9 @@ export default function RouteMap(props: Props) {
   const jumped = useRef(false);
   useEffect(() => {
     const m = mapRef.current;
-    if (!m || !props.gpsFix || jumped.current) return;
+    if (!m || !props.gpsFix || jumped.current || props.plan) return;
     jumped.current = true;
-    if (!views.has(props.viewKey ?? props.insp.id) && !contentPositions(props.insp).length) m.setView([props.gpsFix.lat, props.gpsFix.lng], 17);
+    if (!views.has(`${props.viewKey ?? props.insp.id}:map`) && !contentPositions(props.insp, null).length) m.setView([props.gpsFix.lat, props.gpsFix.lng], 17);
   }, [props.gpsFix, props.insp]);
 
   // ------------------------------------------------ GPS-Punkt
@@ -152,7 +190,7 @@ export default function RouteMap(props: Props) {
     if (!g) return;
     g.clearLayers();
     const f = props.gpsFix;
-    if (!f) return;
+    if (!f || props.plan) return; // Plan hat keinen GPS-Bezug
     if (f.accuracy) L.circle([f.lat, f.lng], { radius: f.accuracy, color: '#0A84FF', weight: 1, fillOpacity: 0.12, interactive: false }).addTo(g);
     L.marker([f.lat, f.lng], { icon: L.divIcon({ className: 'gps-dot', iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false, keyboard: false }).addTo(g);
   }, [props.gpsFix]);
@@ -163,7 +201,9 @@ export default function RouteMap(props: Props) {
     if (!g) return;
     g.clearLayers();
     const { insp, editMode, selectedId, tool } = props;
-    const byId = new Map(insp.route.points.map((p) => [p.id, p]));
+    const space = props.plan?.id ?? null;
+    // nur Punkte der aktuellen Grundlage (Landkarte oder dieser Plan)
+    const byId = new Map(insp.route.points.filter((p) => (p.planId ?? null) === space).map((p) => [p.id, p]));
     const { startIds, endIds } = endpoints(insp);
     const legsOf = new Map<string, { line: L.Polyline; hit: L.Polyline; end: 0 | 1 }[]>();
     const lineTap = (segId: string) => (e: L.LeafletMouseEvent) => {
@@ -171,8 +211,14 @@ export default function RouteMap(props: Props) {
       propsRef.current.onTapLine(segId, { lat: e.latlng.lat, lng: e.latlng.lng });
     };
 
+    if (props.extraLine?.length) {
+      const ll = props.extraLine.map((p) => [p.lat, p.lng] as L.LatLngTuple);
+      if (ll.length > 1) L.polyline(ll, { color: '#000', weight: 3, dashArray: '6 6', interactive: false }).addTo(g);
+      ll.forEach((p) => L.circleMarker(p, { radius: 7, color: '#000', weight: 2, fillColor: '#FFD60A', fillOpacity: 1, interactive: false }).addTo(g));
+    }
+
     // GPS-Aufzeichnungen (Rohdaten)
-    if (props.showTracks || props.liveTrackId) {
+    if (!space && (props.showTracks || props.liveTrackId)) {
       for (const t of insp.route.tracks) {
         if (t.fixes.length < 2) continue;
         if (t.convertedSegmentId && t.id !== props.liveTrackId) continue;
@@ -208,7 +254,8 @@ export default function RouteMap(props: Props) {
     // Fotos
     if (props.showPhotos) {
       for (const f of insp.photos) {
-        const pos = f.position ?? (f.pointId ? byId.get(f.pointId)?.position : null);
+        // Plan: Fotos am zugeordneten Planpunkt; Karte: GPS-Position oder Kartenpunkt
+        const pos = space ? (f.pointId ? byId.get(f.pointId)?.position : null) : f.position ?? (f.pointId ? byId.get(f.pointId)?.position : null);
         if (!pos) continue;
         const sel = f.id === props.selectedPhotoId;
         const m = L.marker([pos.lat, pos.lng], {
@@ -221,7 +268,7 @@ export default function RouteMap(props: Props) {
     }
 
     // Punkte
-    for (const p of insp.route.points) {
+    for (const p of byId.values()) {
       if (!p.position) continue;
       const sel = p.id === selectedId;
       const seg = insp.route.segments.find((s) => s.pointIds.includes(p.id));
@@ -264,7 +311,7 @@ export default function RouteMap(props: Props) {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.insp.route, props.insp.photos, props.selectedId, props.selectedPhotoId, props.editMode, props.tool, props.showPhotos, props.showTracks, props.liveTrackId]);
+  }, [props.insp.route, props.insp.photos, props.selectedId, props.selectedPhotoId, props.editMode, props.tool, props.showPhotos, props.showTracks, props.liveTrackId, props.plan?.id, props.extraLine]);
 
   const cls = ['route-map', props.tool !== 'none' ? 'tool-active' : '', props.editMode ? 'editing' : ''].join(' ');
   return <div ref={el} className={cls} />;

@@ -24,12 +24,22 @@ export function activeSegment(d: Inspection): RouteSegment {
   return seg;
 }
 
+/** Plan der aktuellen Kartengrundlage (undefined = Landkarte) */
+export function currentPlanId(d: Inspection): string | undefined {
+  return d.basemap?.kind === 'plan' ? d.basemap.planId : undefined;
+}
+
 export function addRoutePoint(
   d: Inspection,
   position: LatLng | null,
-  opts: { source: Source; accuracy?: number | null; title?: string; confirmed?: boolean; segmentId?: string } = { source: 'manual' },
+  opts: { source: Source; accuracy?: number | null; title?: string; confirmed?: boolean; segmentId?: string; planId?: string | null } = { source: 'manual' },
 ): RoutePoint {
-  const seg = opts.segmentId ? d.route.segments.find((s) => s.id === opts.segmentId) ?? activeSegment(d) : activeSegment(d);
+  // GPS-Punkte (planId: null) liegen immer auf der Landkarte, sonst auf der aktuellen Grundlage
+  const planId = opts.planId === undefined ? currentPlanId(d) : opts.planId ?? undefined;
+  let seg = opts.segmentId ? d.route.segments.find((s) => s.id === opts.segmentId) ?? activeSegment(d) : activeSegment(d);
+  const lastId = seg.pointIds[seg.pointIds.length - 1];
+  const last = lastId ? d.route.points.find((x) => x.id === lastId) : null;
+  if (last && (last.planId ?? undefined) !== planId) seg = newEmptySegment(d); // Karte und Plan nicht in einer Linie mischen
   const p = newPoint({
     number: nextNumber(d, 'route'),
     position,
@@ -37,6 +47,7 @@ export function addRoutePoint(
     source: opts.source,
     title: opts.title ?? '',
     confirmed: opts.confirmed ?? true,
+    planId,
   });
   d.route.points.push(p);
   seg.pointIds.push(p.id);
@@ -44,7 +55,7 @@ export function addRoutePoint(
 }
 
 export function addMarker(d: Inspection, position: LatLng, symbol = 'pin', source: Source = 'manual'): RoutePoint {
-  const p = newPoint({ kind: 'marker', number: nextNumber(d, 'marker'), position, symbol, source });
+  const p = newPoint({ kind: 'marker', number: nextNumber(d, 'marker'), position, symbol, source, planId: currentPlanId(d) });
   d.route.points.push(p);
   return p;
 }
@@ -57,14 +68,15 @@ export function insertPointOnLine(d: Inspection, segId: string, at: LatLng): Rou
   let bestIdx = -1;
   let bestD = Infinity;
   for (let i = 0; i < seg.pointIds.length - 1; i++) {
-    const a = byId.get(seg.pointIds[i])?.position;
+    const pa = byId.get(seg.pointIds[i]);
+    const a = pa?.position;
     const b = byId.get(seg.pointIds[i + 1])?.position;
     if (!a || !b) continue;
-    const { d: dist } = distanceToSegment(at, a, b);
+    const dist = pa?.planId ? planSegmentDistance(at, a, b) : distanceToSegment(at, a, b).d;
     if (dist < bestD) { bestD = dist; bestIdx = i; }
   }
   if (bestIdx < 0) return null;
-  const p = newPoint({ number: nextNumber(d, 'route'), position: at, source: 'manual' });
+  const p = newPoint({ number: nextNumber(d, 'route'), position: at, source: 'manual', planId: byId.get(seg.pointIds[bestIdx])?.planId });
   d.route.points.push(p);
   seg.pointIds.splice(bestIdx + 1, 0, p.id);
   return p;
@@ -269,4 +281,12 @@ export function orderedPoints(d: Inspection): RoutePoint[] {
   for (const p of d.route.points) if (p.kind === 'route' && !seen.has(p.id)) out.push(p);
   for (const p of d.route.points) if (p.kind === 'marker') out.push(p);
   return out;
+}
+
+/** Abstand Punkt → Strecke in Planpixeln (ebene Geometrie) */
+function planSegmentDistance(p: LatLng, a: LatLng, b: LatLng): number {
+  const dx = b.lng - a.lng, dy = b.lat - a.lat;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((p.lng - a.lng) * dx + (p.lat - a.lat) * dy) / len2)) : 0;
+  return Math.hypot(p.lng - (a.lng + t * dx), p.lat - (a.lat + t * dy));
 }

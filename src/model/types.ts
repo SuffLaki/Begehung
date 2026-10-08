@@ -96,6 +96,11 @@ export interface RoutePoint {
   source: Source;
   /** false = automatisch ermittelt und vom Benutzer noch nicht bestätigt */
   confirmed: boolean;
+  /**
+   * Plan, auf dem der Punkt liegt. Leer = Landkarte (position = WGS84).
+   * Bei Plänen ist position in Planpixeln: lng = x, lat = −y (Leaflet CRS.Simple).
+   */
+  planId?: ID;
   /** reiner Stützpunkt des Linienverlaufs (z. B. aus Routing) – ohne eigene Nummer in Karte/PDF */
   vertex?: boolean;
   /** Nachvollziehbarkeit für geschätzte Punkte */
@@ -263,6 +268,31 @@ export interface Signature {
   signedAt: number;
 }
 
+/** Eingefügter Plan (z. B. Lageplan mit eingezeichneter Trasse) – ersetzt die Landkarte */
+export interface PlanSheet {
+  id: ID;
+  name: string;
+  fileName: string;
+  /** Größe des gespeicherten Planbildes in Pixeln */
+  width: number;
+  height: number;
+  /** PDF-Punkte (1/72 Zoll) je Pixel – nur bei PDF-Plänen bekannt, für Maßstab 1:x */
+  ptPerPx: number | null;
+  /** Maßstab: Meter je Pixel (null = unbekannt → keine Längen) */
+  metersPerPx: number | null;
+  scaleNote: string;
+  createdAt: number;
+}
+
+/** Kartengrundlage der Begehung: Landkarte oder ein Plan */
+export type Basemap = { kind: 'map' } | { kind: 'plan'; planId: ID };
+
+export interface PlanBlob {
+  id: ID;
+  inspectionId: ID;
+  image: Blob;
+}
+
 export interface Inspection {
   id: ID;
   schemaVersion: 1;
@@ -276,6 +306,10 @@ export interface Inspection {
   summary: Summary | null;
   signature: Signature | null;
   pdfSettings: PdfSettings;
+  /** eingefügte Pläne */
+  plans?: PlanSheet[];
+  /** aktuelle Kartengrundlage (Standard: Landkarte) */
+  basemap?: Basemap;
   /** Segment, an das neue Punkte angehängt werden */
   activeSegmentId: ID | null;
   counters: { point: number; photo: number };

@@ -3,7 +3,7 @@
 // keinen Server-Abgleich gibt.
 
 import type { Inspection } from '../model/types';
-import { getInspection, getPhotoBlob, saveInspection, savePhotoBlob } from './db';
+import { getInspection, getPhotoBlob, getPlanBlob, saveInspection, savePhotoBlob, savePlanBlob } from './db';
 import { blobToBase64 } from '../speech/audioRecorder';
 import { uid } from '../model/factory';
 
@@ -13,6 +13,7 @@ interface BackupFile {
   exportedAt: number;
   inspection: Inspection;
   photos: { id: string; full: string; thumb: string }[];
+  plans?: { id: string; image: string }[];
 }
 
 export async function exportInspection(id: string): Promise<{ blob: Blob; fileName: string }> {
@@ -23,7 +24,12 @@ export async function exportInspection(id: string): Promise<{ blob: Blob; fileNa
     const rec = await getPhotoBlob(f.id);
     if (rec) photos.push({ id: f.id, full: await blobToBase64(rec.full), thumb: await blobToBase64(rec.thumb) });
   }
-  const data: BackupFile = { format: 'begehungsprotokoll-backup', version: 1, exportedAt: Date.now(), inspection: insp, photos };
+  const plans: NonNullable<BackupFile['plans']> = [];
+  for (const pl of insp.plans ?? []) {
+    const rec = await getPlanBlob(pl.id);
+    if (rec) plans.push({ id: pl.id, image: await blobToBase64(rec.image) });
+  }
+  const data: BackupFile = { format: 'begehungsprotokoll-backup', version: 1, exportedAt: Date.now(), inspection: insp, photos, plans };
   const name = `Begehung_${insp.meta.projectNumber || insp.meta.projectName || 'Projekt'}_${insp.meta.date}`.replace(/[^\wäöüÄÖÜß.-]+/g, '_');
   return { blob: new Blob([JSON.stringify(data)], { type: 'application/json' }), fileName: `${name}.json` };
 }
@@ -55,6 +61,16 @@ export async function importInspection(file: Blob): Promise<Inspection> {
       newIds.set(f.id, nid);
       f.id = nid;
     }
+    for (const pl of insp.plans ?? []) {
+      const nid = uid('pl');
+      newIds.set(pl.id, nid);
+      pl.id = nid;
+    }
+    for (const p of insp.route.points) if (p.planId) p.planId = newIds.get(p.planId) ?? p.planId;
+    if (insp.basemap?.kind === 'plan') insp.basemap = { kind: 'plan', planId: newIds.get(insp.basemap.planId) ?? insp.basemap.planId };
+  }
+  for (const pl of data.plans ?? []) {
+    await savePlanBlob({ id: newIds.get(pl.id) ?? pl.id, inspectionId: insp.id, image: b64ToBlob(pl.image, 'image/jpeg') });
   }
   for (const p of data.photos ?? []) {
     await savePhotoBlob({ id: newIds.get(p.id) ?? p.id, inspectionId: insp.id, full: b64ToBlob(p.full, 'image/jpeg'), thumb: b64ToBlob(p.thumb, 'image/jpeg') });

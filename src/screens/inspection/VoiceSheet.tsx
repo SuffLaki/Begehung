@@ -29,6 +29,7 @@ import type { GeoFix, LineType } from '../../model/types';
 import { hasPlaces, parsePlaces, placeLabel } from '../../places/placeParser';
 import { applyResolved, resolvePieces, type ResolvedPiece } from '../../places/resolve';
 import { lineTypeOf } from '../../annotate/lines';
+import { activePlan } from '../../plans/plans';
 
 type Phase = 'input' | 'recording' | 'processing' | 'result';
 
@@ -329,8 +330,12 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
             )}
             {mode === 'note' && <button className="btn primary big block" onClick={saveNote}>Beobachtung speichern</button>}
 
-            {mode === 'route' && placeError && <Banner>{placeError}</Banner>}
-            {mode === 'route' && places && places.length > 0 && !preferLegs && (
+            {mode === 'route' && activePlan(insp) && (
+              <Banner kind="info">Ein Plan ist die Grundlage. Richtungs- und Adressangaben lassen sich ohne GPS-Bezug nicht automatisch auf dem Plan einzeichnen – bitte die Punkte auf dem Plan antippen. Zum Einzeichnen auf der Landkarte die Grundlage wechseln.</Banner>
+            )}
+            {mode === 'route' && activePlan(insp) && <button className="btn block" onClick={() => { close(); useUi.getState().set({ mapTool: 'addPoint' }); navigate(`/i/${insp.id}/map`, true); }}>Punkte auf dem Plan setzen</button>}
+            {mode === 'route' && !activePlan(insp) && placeError && <Banner>{placeError}</Banner>}
+            {mode === 'route' && !activePlan(insp) && places && places.length > 0 && !preferLegs && (
               <PlaceResults places={places} types={types}
                 onType={(id, key) => setPlaces(places.map((p) => (p.piece.id === id ? { ...p, piece: { ...p.piece, lineType: key || null, lineWord: key ? lineTypeOf(types, key).label : '' } } : p)))}
                 onRemove={(id) => setPlaces(places.filter((p) => p.piece.id !== id))}
@@ -340,7 +345,7 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
                 onApply={applyPlaces}
                 onLegs={legs.length ? () => setPreferLegs(true) : null} />
             )}
-            {mode === 'route' && (!places || !places.length || preferLegs) && (
+            {mode === 'route' && !activePlan(insp) && (!places || !places.length || preferLegs) && (
               <>
                 {legs.length === 0 ? (
                   <Banner>Im Text wurden keine Wegabschnitte erkannt. Formulierung wie „30 Meter nach Norden, dann links 80 Meter“ verwenden.</Banner>

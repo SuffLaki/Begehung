@@ -4,7 +4,7 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type {
-  Inspection, InspectionSummaryRow, PendingJob, PdfTemplate, PhotoBlob, Project, Report, Settings,
+  Inspection, InspectionSummaryRow, PendingJob, PdfTemplate, PhotoBlob, PlanBlob, Project, Report, Settings,
 } from '../model/types';
 import { defaultSettings, standardTemplate, STANDARD_TEMPLATE_ID } from '../model/factory';
 import { routeLength } from '../geo/geo';
@@ -17,14 +17,17 @@ interface BegehungDB extends DBSchema {
   settings: { key: string; value: Settings };
   jobs: { key: string; value: PendingJob; indexes: { byInspection: string } };
   reports: { key: string; value: Report; indexes: { byInspection: string } };
+  plans: { key: string; value: PlanBlob; indexes: { byInspection: string } };
 }
 
 let dbPromise: Promise<IDBPDatabase<BegehungDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<BegehungDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<BegehungDB>('begehungsprotokoll', 1, {
-      upgrade(d) {
+    dbPromise = openDB<BegehungDB>('begehungsprotokoll', 2, {
+      upgrade(d, oldVersion) {
+        if (oldVersion < 2) d.createObjectStore('plans', { keyPath: 'id' }).createIndex('byInspection', 'inspectionId');
+        if (oldVersion >= 1) return;
         const insp = d.createObjectStore('inspections', { keyPath: 'id' });
         insp.createIndex('byUpdated', 'updatedAt');
         d.createObjectStore('projects', { keyPath: 'id' });
@@ -100,7 +103,7 @@ export function summarize(i: Inspection): InspectionSummaryRow {
     pointCount: i.route.points.filter((p) => p.kind === 'route').length,
     photoCount: i.photos.length,
     noteCount: i.notes.length,
-    lengthM: routeLength(i.route),
+    lengthM: routeLength(i.route, i.plans),
     createdAt: i.createdAt,
     updatedAt: i.updatedAt,
   };
@@ -113,9 +116,9 @@ export async function listInspections(): Promise<InspectionSummaryRow[]> {
 
 export async function deleteInspection(id: string): Promise<void> {
   const d = await db();
-  const tx = d.transaction(['inspections', 'photos', 'jobs', 'reports'], 'readwrite');
+  const tx = d.transaction(['inspections', 'photos', 'jobs', 'reports', 'plans'], 'readwrite');
   await tx.objectStore('inspections').delete(id);
-  for (const store of ['photos', 'jobs', 'reports'] as const) {
+  for (const store of ['photos', 'jobs', 'reports', 'plans'] as const) {
     const s = tx.objectStore(store);
     const keys = await s.index('byInspection').getAllKeys(id);
     for (const k of keys) await s.delete(k);
@@ -207,4 +210,18 @@ export async function listReports(inspectionId: string): Promise<Report[]> {
 
 export async function deleteReport(id: string): Promise<void> {
   await (await db()).delete('reports', id);
+}
+
+// ---------------------------------------------------------------- plans
+
+export async function savePlanBlob(p: PlanBlob): Promise<void> {
+  await (await db()).put('plans', p);
+}
+
+export async function getPlanBlob(id: string): Promise<PlanBlob | undefined> {
+  return (await db()).get('plans', id);
+}
+
+export async function deletePlanBlob(id: string): Promise<void> {
+  await (await db()).delete('plans', id);
 }

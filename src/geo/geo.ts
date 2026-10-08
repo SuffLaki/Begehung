@@ -1,6 +1,6 @@
 // Reine Geometrie-Funktionen (keine Abhängigkeit zur Kartenbibliothek).
 
-import type { LatLng, Route, RoutePoint, TrackFix } from '../model/types';
+import type { LatLng, PlanSheet, Route, RouteSegment, RoutePoint, TrackFix } from '../model/types';
 
 const R = 6371008.8; // mittlerer Erdradius in m
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -46,8 +46,47 @@ export function segmentPositions(route: Route, pointIds: string[]): (LatLng | nu
   return pointIds.map((id) => byId.get(id)?.position ?? null);
 }
 
-export function routeLength(route: Route): number {
-  return route.segments.reduce((s, seg) => s + pathLength(segmentPositions(route, seg.pointIds)), 0);
+/** Abstand in Planpixeln (Plan-Koordinaten: lng = x, lat = −y) */
+export function planDistance(a: LatLng, b: LatLng): number {
+  return Math.hypot(a.lng - b.lng, a.lat - b.lat);
+}
+
+/** Plan eines Abschnitts (über seine Punkte), null = Landkarte */
+export function segmentPlanId(route: Route, seg: RouteSegment): string | null {
+  for (const id of seg.pointIds) {
+    const p = route.points.find((x) => x.id === id);
+    if (p) return p.planId ?? null;
+  }
+  return null;
+}
+
+/**
+ * Länge eines Abschnitts in Metern. Auf Plänen nur mit bekanntem Maßstab,
+ * sonst null (es wird keine Länge erfunden).
+ */
+export function segmentLength(route: Route, seg: RouteSegment, plans: PlanSheet[] = []): number | null {
+  const pos = segmentPositions(route, seg.pointIds);
+  const planId = segmentPlanId(route, seg);
+  if (!planId) return pathLength(pos);
+  const plan = plans.find((p) => p.id === planId);
+  if (!plan?.metersPerPx) return null;
+  let px = 0;
+  let prev: LatLng | null = null;
+  for (const p of pos) {
+    if (p && prev) px += planDistance(prev, p);
+    if (p) prev = p;
+  }
+  return px * plan.metersPerPx;
+}
+
+/** Gesamtlänge (Abschnitte ohne bekannten Maßstab zählen nicht mit) */
+export function routeLength(route: Route, plans: PlanSheet[] = []): number {
+  return route.segments.reduce((s, seg) => s + (segmentLength(route, seg, plans) ?? 0), 0);
+}
+
+/** true, wenn Abschnitte auf Plänen ohne Maßstab liegen (Länge unvollständig) */
+export function hasUnscaledLength(route: Route, plans: PlanSheet[] = []): boolean {
+  return route.segments.some((seg) => seg.pointIds.length > 1 && segmentLength(route, seg, plans) === null);
 }
 
 export function formatDistance(m: number): string {
@@ -103,11 +142,12 @@ export function simplify(fixes: TrackFix[], toleranceM: number): TrackFix[] {
   return fixes.filter((_, i) => keep[i]);
 }
 
+/** nächster Punkt auf der Landkarte (GPS-/Adressbezug – Planpunkte haben keine Geo-Lage) */
 export function nearestPoint(points: RoutePoint[], p: LatLng, maxM: number): RoutePoint | null {
   let best: RoutePoint | null = null;
   let bestD = maxM;
   for (const q of points) {
-    if (!q.position) continue;
+    if (!q.position || q.planId) continue;
     const d = distance(q.position, p);
     if (d <= bestD) { bestD = d; best = q; }
   }
