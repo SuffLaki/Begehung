@@ -182,6 +182,29 @@ export interface PhotoMeta {
   aiSuggestion: string;
   width: number;
   height: number;
+  /** eingezeichnete Linien (Vektordaten – das Originalfoto bleibt unverändert) */
+  annotations?: PhotoAnnotation[];
+}
+
+/** Linienart für Foto-Markierungen, z. B. „Tiefbau“ = rot. Über Schlüsselwörter per Text/Sprache wählbar. */
+export interface LineType {
+  key: string;
+  label: string;
+  color: string;
+  /** Wörter, die diese Linienart auswählen (Kleinschreibung, Wortanfang genügt) */
+  keywords: string[];
+}
+
+export interface PhotoAnnotation {
+  id: ID;
+  /** Schlüssel der Linienart */
+  type: string;
+  /** angezeigte Beschriftung (das erkannte Wort, z. B. „Leerrohr“) */
+  label: string;
+  /** Polylinie, normiert auf Bildbreite/-höhe (0..1) */
+  points: [number, number][];
+  source: 'manual' | 'ai';
+  createdAt: number;
 }
 
 export interface Task {
@@ -344,6 +367,7 @@ export interface Settings {
   user: User;
   mail: MailDefaults;
   defaultMapType: MapType;
+  lineTypes: LineType[];
 }
 
 export type JobType = 'voice-note' | 'voice-route';

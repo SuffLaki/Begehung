@@ -4,7 +4,7 @@ import { useApp, toast, errorText, confirmDialog } from '../state/appStore';
 import { navigate } from '../router';
 import { Banner, Field, Nav, Seg, SelectField, SwitchRow, Spinner } from '../ui/kit';
 import type { MapType, Role, Settings } from '../model/types';
-import { DEFAULT_CATEGORIES } from '../model/factory';
+import { DEFAULT_CATEGORIES, DEFAULT_LINE_TYPES, uid } from '../model/factory';
 import { ROLE_LABELS, can } from '../model/permissions';
 import { MAP_TYPES } from '../map/providers';
 import { pickFile, loadImage, scaleToCanvas } from '../camera/photo';
@@ -127,6 +127,11 @@ export default function SettingsScreen() {
           {catsAllowed && <button className="btn sm plain" style={{ marginTop: 6 }} onClick={async () => { if (await confirmDialog({ title: 'Standardkategorien wiederherstellen?', confirmLabel: 'Zurücksetzen' })) commit((x) => { x.categories = [...DEFAULT_CATEGORIES]; }); }}><RotateCcw size={14} />Standard wiederherstellen</button>}
         </div>
 
+        {/* ------------------------------------------------ Linienarten */}
+        <div className="group-title">Linienarten für Fotos</div>
+        <LineTypesEditor />
+        <div className="group-foot">Beim Markieren eines Fotos wählt das gesagte/getippte Wort die Linie. Mehrere Wörter mit Komma trennen.</div>
+
         {/* ------------------------------------------------ KI */}
         <div className="group-title">KI-Assistent</div>
         <div className="list">
@@ -206,6 +211,57 @@ export default function SettingsScreen() {
           }
         }}><Trash2 size={16} />KI-Schlüssel vom Gerät löschen</button>
       </div>
+    </div>
+  );
+}
+
+const LINE_COLORS = ['#E53935', '#1E88E5', '#43A047', '#FB8C00', '#8E24AA', '#FDD835', '#00ACC1', '#212121'];
+
+function LineTypesEditor() {
+  const types = useApp((x) => x.settings.lineTypes);
+  const update = useApp((x) => x.updateSettings);
+  const allowed = can(useApp.getState().settings.user, 'categories.manage');
+  const setType = (key: string, fn: (t: Settings['lineTypes'][number]) => void) => void update((x) => {
+    const t = x.lineTypes.find((y) => y.key === key);
+    if (t) fn(t);
+  });
+  return (
+    <div className="list">
+      {types.map((t) => (
+        <div key={`${t.key}-${t.label}-${t.keywords.join()}`} style={{ padding: '10px 16px', borderTop: '0.5px solid var(--sep)' }}>
+          <div className="hstack">
+            <span className="seg-swatch" style={{ background: t.color, width: 28, height: 8 }} />
+            <input className="grow" style={{ border: 0, background: 'transparent', fontSize: 17, fontWeight: 600, outline: 0 }} defaultValue={t.label} aria-label="Bezeichnung" readOnly={!allowed}
+              onBlur={(e) => e.target.value.trim() && e.target.value !== t.label && setType(t.key, (y) => { y.label = e.target.value.trim(); })} />
+            {allowed && types.length > 1 && (
+              <button className="icon-btn" aria-label={`${t.label} löschen`} onClick={async () => {
+                if (await confirmDialog({ title: `Linienart „${t.label}“ löschen?`, message: 'Bereits eingezeichnete Linien bleiben erhalten (orange).', confirmLabel: 'Löschen', destructive: true })) {
+                  void update((x) => { x.lineTypes = x.lineTypes.filter((y) => y.key !== t.key); });
+                }
+              }}><Trash2 size={18} color="var(--danger)" /></button>
+            )}
+          </div>
+          <input className="input" style={{ marginTop: 8, padding: '8px 12px', fontSize: 15 }} defaultValue={t.keywords.join(', ')} placeholder="Schlüsselwörter, z. B. leerrohr, bestandsrohr" aria-label="Schlüsselwörter" readOnly={!allowed}
+            onBlur={(e) => setType(t.key, (y) => { y.keywords = e.target.value.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean); })} />
+          {allowed && (
+            <div className="hstack" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+              {LINE_COLORS.map((c) => (
+                <button key={c} className={`color-dot${t.color === c ? ' on' : ''}`} style={{ background: c }} aria-label={`Farbe ${c}`} onClick={() => setType(t.key, (y) => { y.color = c; })} />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      {allowed && (
+        <div className="hstack" style={{ padding: '6px 8px', borderTop: '0.5px solid var(--sep)' }}>
+          <button className="btn sm plain" onClick={() => void update((x) => { x.lineTypes.push({ key: uid('lt'), label: 'Neue Linie', color: LINE_COLORS[x.lineTypes.length % LINE_COLORS.length], keywords: [] }); })}><Plus size={16} />Linienart</button>
+          <button className="btn sm plain" onClick={async () => {
+            if (await confirmDialog({ title: 'Standard-Linienarten wiederherstellen?', message: 'Tiefbau (rot), Bestandsrohr/Leerrohr (blau).', confirmLabel: 'Zurücksetzen' })) {
+              void update((x) => { x.lineTypes = DEFAULT_LINE_TYPES.map((t) => ({ ...t, keywords: [...t.keywords] })); });
+            }
+          }}><RotateCcw size={14} />Standard</button>
+        </div>
+      )}
     </div>
   );
 }

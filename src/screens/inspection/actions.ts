@@ -14,6 +14,8 @@ export type VoiceMode = 'note' | 'route';
 interface UiState {
   pointId: string | null;
   photoId: string | null;
+  /** Foto, in das gerade Linien eingezeichnet werden */
+  annotateId: string | null;
   /** 'new' = neue Notiz */
   noteId: string | null;
   notePrefill: { pointId?: string | null } | null;
@@ -26,6 +28,7 @@ interface UiState {
 export const useUi = create<UiState>((set) => ({
   pointId: null,
   photoId: null,
+  annotateId: null,
   noteId: null,
   notePrefill: null,
   voice: null,
@@ -35,7 +38,7 @@ export const useUi = create<UiState>((set) => ({
 }));
 
 export function resetUi() {
-  useUi.setState({ pointId: null, photoId: null, noteId: null, notePrefill: null, voice: null, segmentsOpen: false, recorderOpen: false });
+  useUi.setState({ pointId: null, photoId: null, annotateId: null, noteId: null, notePrefill: null, voice: null, segmentsOpen: false, recorderOpen: false });
 }
 
 /** 📍 Aktuelle GPS-Position als nächsten Trassenpunkt setzen */

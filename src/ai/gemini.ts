@@ -5,7 +5,7 @@
 // kostenpflichtiges Konto verwenden (siehe Einstellungen).
 
 import type { AiProvider } from './ai';
-import { guardLegs, guardNote, NOTE_PROMPT, PHOTO_PROMPT, ROUTE_PROMPT, SUMMARY_PROMPT } from './ai';
+import { guardLegs, guardLines, guardNote, LINES_PROMPT, NOTE_PROMPT, PHOTO_PROMPT, ROUTE_PROMPT, SUMMARY_PROMPT } from './ai';
 import { blobToBase64 } from '../speech/audioRecorder';
 import type { NoteDraft, RouteLeg } from '../speech/parsers';
 
@@ -117,6 +117,40 @@ export class GeminiProvider implements AiProvider {
 
   async summarize(material: string) {
     return this.call([{ text: material }], SUMMARY_PROMPT, null, 900);
+  }
+
+  async transcribe(wav: Blob) {
+    const r = await this.json<{ transcript: string }>(
+      [{ inlineData: { mimeType: 'audio/wav', data: await blobToBase64(wav) } }, { text: TRANSCRIBE }],
+      'Schreibe wortgetreu auf Deutsch ab, was gesagt wird. Nichts ergänzen.',
+      { type: 'OBJECT', properties: { transcript: { type: 'STRING' } }, required: ['transcript'] },
+    );
+    return (r.transcript ?? '').trim();
+  }
+
+  async suggestLines(jpeg: Blob, instruction: string, types: { key: string; label: string }[]) {
+    const schema = {
+      type: 'OBJECT',
+      properties: {
+        lines: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              type: { type: 'STRING' },
+              points: { type: 'ARRAY', items: { type: 'OBJECT', properties: { x: { type: 'NUMBER' }, y: { type: 'NUMBER' } }, required: ['x', 'y'] } },
+            },
+            required: ['type', 'points'],
+          },
+        },
+      },
+      required: ['lines'],
+    };
+    const r = await this.json<{ lines: { type?: string; points?: { x?: number; y?: number }[] }[] }>(
+      [{ inlineData: { mimeType: 'image/jpeg', data: await blobToBase64(jpeg) } }, { text: `Anweisung: ${instruction}` }],
+      LINES_PROMPT(types), schema,
+    );
+    return guardLines(r.lines ?? [], types);
   }
 
   async test() {

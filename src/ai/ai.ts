@@ -8,7 +8,7 @@
 //    werden nach der Antwort verworfen (siehe guard*-Funktionen).
 //  * Ergebnisse sind Vorschläge und müssen vom Benutzer bestätigt werden.
 
-import type { AiSettings } from '../model/types';
+import type { AiSettings, LineType } from '../model/types';
 import { useApp } from '../state/appStore';
 import { GeminiProvider } from './gemini';
 import { numbersIn, type Direction, type NoteDraft, type RouteLeg, type Turn } from '../speech/parsers';
@@ -26,6 +26,10 @@ export interface AiProvider {
   describePhoto(jpeg: Blob, context: string): Promise<string>;
   /** Notizen → Zusammenfassung */
   summarize(material: string): Promise<string>;
+  /** Audio → wörtliche Abschrift */
+  transcribe(wav: Blob): Promise<string>;
+  /** Foto + Anweisung → Linienvorschläge (normiert 0..1), nur für eindeutig sichtbare Elemente */
+  suggestLines(jpeg: Blob, instruction: string, types: { key: string; label: string }[]): Promise<{ type: string; points: [number, number][] }[]>;
   test(): Promise<void>;
 }
 
@@ -90,6 +94,29 @@ export const SUMMARY_PROMPT = `${RULES}
 Fasse die folgenden Begehungsnotizen in einem kurzen Fließtext (max. 8 Sätze) zusammen.
 Nenne wesentliche Beobachtungen und offene Punkte. Übernimm Stationen/Maße nur, wenn sie in den Notizen stehen.
 Keine Empfehlungen oder Bewertungen hinzufügen, die nicht in den Notizen stehen.`;
+
+export const LINES_PROMPT = (types: { key: string; label: string }[]) => `${RULES}
+Du markierst auf einem Baustellenfoto den Verlauf von Elementen als Linie.
+Linienarten (Feld "type"): ${types.map((t) => `"${t.key}" = ${t.label}`).join(', ')}.
+Zeichne nur Linien für Elemente, die in der Anweisung genannt werden UND auf dem Foto eindeutig zu sehen sind
+(z. B. Graben/Aufgrabung, sichtbares Rohr). Ist der Verlauf nicht erkennbar, gib für dieses Element keine Linie zurück.
+Folgt die Anweisung einer Ortsangabe („entlang der Mauer“, „links am Weg“), orientiere dich daran.
+Punkte: 2 bis 8 Punkte entlang des Verlaufs, x und y jeweils 0–1000 (0,0 = oben links).`;
+
+/** KI-Linien prüfen: nur bekannte Arten, mind. 2 Punkte, Koordinaten begrenzen */
+export function guardLines(raw: { type?: string; points?: { x?: number; y?: number }[] }[], types: Pick<LineType, 'key'>[]): { type: string; points: [number, number][] }[] {
+  const keys = new Set(types.map((t) => t.key));
+  return raw
+    .filter((r) => r && keys.has(r.type ?? ''))
+    .map((r) => ({
+      type: r.type!,
+      points: (r.points ?? [])
+        .filter((p) => typeof p.x === 'number' && typeof p.y === 'number' && isFinite(p.x) && isFinite(p.y))
+        .slice(0, 12)
+        .map((p) => [Math.min(1, Math.max(0, p.x! / 1000)), Math.min(1, Math.max(0, p.y! / 1000))] as [number, number]),
+    }))
+    .filter((l) => l.points.length >= 2);
+}
 
 // ---------------------------------------------------------------- Prüfung der KI-Ergebnisse
 

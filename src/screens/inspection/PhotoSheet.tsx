@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, Trash2, MapPin, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Trash2, MapPin, CheckCircle2, PenLine } from 'lucide-react';
+import { AnnotatedPhoto } from '../../annotate/AnnotationLayer';
+import { legendText } from '../../annotate/lines';
 import { useInspection } from '../../state/inspectionStore';
 import { useApp, confirmDialog, toast, errorText } from '../../state/appStore';
 import type { PhotoMeta } from '../../model/types';
@@ -75,7 +77,13 @@ export default function PhotoSheet() {
   return (
     <Sheet open onClose={close} title={`Foto ${f.number}`} full right={<button className="nav-btn" style={{ fontWeight: 600, marginTop: 8 }} onClick={close}>Fertig</button>}>
       <div className="stack">
-        {url ? <img className="photo-view" src={url} alt={`Foto ${f.number}`} /> : <div className="photo-view center" style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner /></div>}
+        {url ? <AnnotatedPhoto src={url} w={f.width} h={f.height} anns={f.annotations ?? []} types={settings.lineTypes} /> : <div className="photo-view center" style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner /></div>}
+        {(f.annotations?.length ?? 0) > 0 && <div className="small muted center">{legendText(f.annotations!, settings.lineTypes)}</div>}
+        {canEdit && (
+          <button className="btn block" onClick={() => { commit(); useUi.getState().set({ photoId: null, annotateId: f.id }); }}>
+            <PenLine size={18} />{f.annotations?.length ? 'Linien bearbeiten' : 'Linien einzeichnen (Tiefbau, Leerrohr …)'}
+          </button>
+        )}
 
         {f.pointAutoAssigned && f.pointId && (
           <Banner kind="info">

@@ -105,6 +105,18 @@ markiert. Fehlt Richtung oder Entfernung, wird **keine** Position erfunden – d
   Zusammenfassungen kommen nur bestätigt ins PDF.
 * Datenschutz: Fotos/Audio nur nach Freigabe in den Einstellungen; GPS-Koordinaten werden nie an die KI gesendet.
 
+## Foto-Markierungen (Linien)
+
+* `PhotoMeta.annotations`: Polylinien normiert auf 0..1, mit Linienart und Beschriftung; das Originalfoto bleibt unverändert.
+* Linienarten (`Settings.lineTypes`): Name, Farbe, Schlüsselwörter. Standard: Tiefbau = rot,
+  Bestandsrohr/Leerrohr = blau. In den Einstellungen erweiterbar.
+* Editor (`screens/inspection/AnnotateSheet.tsx`): Wort tippen oder sprechen → Linienart wird gewählt
+  (`annotate/lines.ts → matchLineTypes`), Verlauf mit dem Finger (Freihand/Gerade).
+  Optional KI-Vorschlag (`AiProvider.suggestLines`), gestrichelt, muss übernommen werden; unbekannte Arten
+  und Koordinaten außerhalb des Bildes werden verworfen.
+* Anzeige per SVG (`annotate/AnnotationLayer.tsx`), im PDF werden die Linien ins Foto gezeichnet
+  (`drawAnnotations`) und als Legende unter das Foto geschrieben.
+
 ## PDF
 
 * `pdf/layout.ts`: Seitenaufbau mit pdf-lib, freier Inhaltsbereich = Vorlagenränder (mm), Textumbruch,

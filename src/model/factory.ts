@@ -1,5 +1,5 @@
 import type {
-  Inspection, InspectionMeta, Note, PdfSettings, PdfTemplate, PhotoMeta, RoutePoint, RouteSegment, Settings, Task, User,
+  Inspection, InspectionMeta, LineType, Note, PdfSettings, PdfTemplate, PhotoMeta, RoutePoint, RouteSegment, Settings, Task, User,
 } from './types';
 
 export function uid(prefix = ''): string {
@@ -11,6 +11,12 @@ export function uid(prefix = ''): string {
 export const DEFAULT_CATEGORIES = [
   'Trassenverlauf', 'Weg', 'Wirtschaftsweg', 'Straße', 'Gewässer', 'Graben', 'Gebäude', 'Grundstück',
   'Baum/Bewuchs', 'Leitung', 'Mast', 'Schacht', 'Hindernis', 'Kreuzung', 'Besonderheit', 'Sonstiges',
+];
+
+/** Linienarten für Foto-Markierungen (in den Einstellungen erweiterbar) */
+export const DEFAULT_LINE_TYPES: LineType[] = [
+  { key: 'tiefbau', label: 'Tiefbau', color: '#E53935', keywords: ['tiefbau'] },
+  { key: 'rohr', label: 'Bestandsrohr / Leerrohr', color: '#1E88E5', keywords: ['bestandsrohr', 'bestandsleerrohr', 'leerrohr', 'leerrohre'] },
 ];
 
 /** Farben für Trassenabschnitte – gut sichtbar auf Straßenkarte und Luftbild */
@@ -149,6 +155,7 @@ export function newPhotoMeta(partial: Partial<PhotoMeta> & Pick<PhotoMeta, 'numb
     category: '',
     description: '',
     aiSuggestion: '',
+    annotations: [],
     width: 0,
     height: 0,
     ...partial,
@@ -200,6 +207,7 @@ export function defaultSettings(): Settings {
       body: 'Guten Tag,\n\nanbei das Begehungsprotokoll {projekt} vom {datum}.\n\nMit freundlichen Grüßen\n{begeher}',
     },
     defaultMapType: 'streets',
+    lineTypes: DEFAULT_LINE_TYPES.map((t) => ({ ...t, keywords: [...t.keywords] })),
   };
 }
 

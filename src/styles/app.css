@@ -398,6 +398,11 @@ textarea.input { min-height: 110px; resize: vertical; line-height: 1.4; }
 .photo-cell .ph-flag { position: absolute; right: 6px; top: 6px; width: 20px; height: 20px; border-radius: 10px; background: #ff9f0a; color: #111; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; }
 .photo-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
 .photo-strip .photo-cell { width: 84px; flex: none; border-radius: 10px; }
+.annotated { position: relative; width: 100%; margin: 0 auto; border-radius: var(--r); overflow: hidden; background: #000; }
+.annotated img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.annotated svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.annotated.editing svg { touch-action: none; cursor: crosshair; }
+.photo-cell .thumb-ann { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .photo-view { width: 100%; border-radius: var(--r); background: #000; display: block; max-height: 52vh; object-fit: contain; }
 
 /* ================================================================ Notes */

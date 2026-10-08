@@ -12,6 +12,7 @@ import { pointDisplayName } from '../model/factory';
 import { getPhotoBlob } from '../storage/db';
 import { canvasToBlob, loadImage, scaleToCanvas } from '../camera/photo';
 import { renderStaticMap } from '../map/staticMap';
+import { drawAnnotations, legendText } from '../annotate/lines';
 
 export const MAP_ASPECT = 4 / 3;
 
@@ -60,6 +61,8 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
       const rec = await getPhotoBlob(id);
       if (rec) {
         const c = scaleToCanvas(await loadImage(rec.full), 1400);
+        const anns = insp.photos.find((f) => f.id === id)?.annotations ?? [];
+        if (anns.length) drawAnnotations(c.getContext('2d')!, anns, c.width, c.height, settings.lineTypes);
         img = await doc.embedJpg(new Uint8Array(await (await canvasToBlob(c, 'image/jpeg', 0.8)).arrayBuffer()));
       }
     } catch { /* Foto fehlt */ }
@@ -114,7 +117,8 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
     const parts = [`Foto ${f.number}`, time(f.takenAt)];
     if (f.position) parts.push(`GPS ${coord(f.position.lat, f.position.lng)}${f.position.accuracy ? ` (±${Math.round(f.position.accuracy)} m)` : ''}`);
     if (f.pointId) parts.push(`Punkt ${pointName(f.pointId)}`);
-    return parts.join(' · ') + (f.description ? `\n${f.description}` : '');
+    const lines = f.annotations?.length ? `\nEingezeichnet: ${legendText(f.annotations, settings.lineTypes)}` : '';
+    return parts.join(' · ') + (f.description ? `\n${f.description}` : '') + lines;
   }
 
   // ==================================================== Deckblatt

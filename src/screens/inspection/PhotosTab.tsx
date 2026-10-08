@@ -3,6 +3,8 @@ import { Camera, ImagePlus, Images } from 'lucide-react';
 import { useInspection } from '../../state/inspectionStore';
 import type { PhotoMeta } from '../../model/types';
 import { usePhotoUrl } from '../../camera/photoUrls';
+import { useApp } from '../../state/appStore';
+import { AnnotationLayer } from '../../annotate/AnnotationLayer';
 import { Empty, Nav, Seg } from '../../ui/kit';
 import { actionPhoto, useUi } from './actions';
 import { useCanEdit, UndoRedo } from './parts';
@@ -10,10 +12,20 @@ import { navigate } from '../../router';
 
 export function PhotoThumb({ photo, onClick }: { photo: PhotoMeta; onClick: () => void }) {
   const url = usePhotoUrl(photo.id, 'thumb');
+  const types = useApp((s) => s.settings.lineTypes);
+  const anns = photo.annotations ?? [];
+  const w = photo.width || 1000, h = photo.height || 750;
+  // Vorschaubild ist quadratisch zugeschnitten (object-fit: cover) → gleiche Ausschnittslogik für die Linien
+  const side = Math.min(w, h);
   const flag = !photo.pointId && !photo.noteId ? '?' : photo.pointAutoAssigned ? 'A' : '';
   return (
     <button className="photo-cell" onClick={onClick} aria-label={`Foto ${photo.number}`}>
       {url && <img src={url} alt="" loading="lazy" />}
+      {anns.length > 0 && (
+        <svg className="thumb-ann" viewBox={`${(w - side) / 2} ${(h - side) / 2} ${side} ${side}`}>
+          <AnnotationLayer anns={anns} w={w} h={h} types={types} labels={false} thin />
+        </svg>
+      )}
       <span className="ph-num">{photo.number}</span>
       {flag && <span className="ph-flag" title={flag === '?' ? 'nicht zugeordnet' : 'automatisch zugeordnet'}>{flag}</span>}
     </button>
