@@ -13,7 +13,7 @@ import { useInspection } from '../../state/inspectionStore';
 import { useApp, toast, errorText } from '../../state/appStore';
 import { WavRecorder, ensureMicConsent, micSupported } from '../../speech/audioRecorder';
 import {
-  applyLegs, legSummary, parseObservation, parseRouteText, refersToStart, DIRECTION_LABEL, TURN_LABEL,
+  applyLegs, assignLineTypes, legSummary, parseObservation, parseRouteText, refersToStart, DIRECTION_LABEL, TURN_LABEL,
   type Direction, type NoteDraft, type RouteLeg, type Turn,
 } from '../../speech/parsers';
 import { aiConfigured, getAi, isNetworkError } from '../../ai/ai';
@@ -22,10 +22,13 @@ import { newNote, pointDisplayName } from '../../model/factory';
 import { activeSegment, newEmptySegment } from '../../geo/routeOps';
 import { fixIfAvailable, currentFix } from '../../geo/gps';
 import { nearestPoint } from '../../geo/geo';
-import { Banner, Field, Seg, SelectField, Sheet, Spinner, fmtDuration } from '../../ui/kit';
+import { Banner, Field, Seg, SelectField, Sheet, Spinner, SwitchRow, fmtDuration } from '../../ui/kit';
 import { useUi, type VoiceMode } from './actions';
 import { navigate } from '../../router';
-import type { GeoFix } from '../../model/types';
+import type { GeoFix, LineType } from '../../model/types';
+import { hasPlaces, parsePlaces, placeLabel } from '../../places/placeParser';
+import { applyResolved, resolvePieces, type ResolvedPiece } from '../../places/resolve';
+import { lineTypeOf } from '../../annotate/lines';
 
 type Phase = 'input' | 'recording' | 'processing' | 'result';
 
@@ -50,6 +53,12 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
   const [fix, setFix] = useState<GeoFix | null>(null);
   const [pointId, setPointId] = useState<string>('');
   const [startRef, setStartRef] = useState<string>('');
+  const [places, setPlaces] = useState<ResolvedPiece[] | null>(null);
+  const [placeError, setPlaceError] = useState('');
+  const [progress, setProgress] = useState('');
+  const [followStreets, setFollowStreets] = useState(true);
+  const [preferLegs, setPreferLegs] = useState(false);
+  const types = settings.lineTypes;
   const rec = useRef<WavRecorder | null>(null);
   const audioUsed = useRef(false);
 
@@ -116,8 +125,9 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
       } else {
         const r2 = await ai.voiceRoute(wav);
         setText(r2.transcript);
-        setLegs(r2.legs);
+        setLegs(assignLineTypes(r2.legs, types));
         pickStartFromText(r2.transcript);
+        await tryPlaces(r2.transcript);
       }
       setVia('ai');
       setPhase('result');
@@ -142,7 +152,7 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
       try {
         const ai = getAi();
         if (mode === 'note') setNote(await ai.structureNote(t, settings.categories));
-        else setLegs(await ai.parseRoute(t));
+        else setLegs(assignLineTypes(await ai.parseRoute(t), types));
         usedAi = true;
       } catch (e) {
         toast(`KI nicht verfügbar (${errorText(e)}) – lokale Auswertung.`, 'error');
@@ -150,11 +160,55 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
     }
     if (!usedAi) {
       if (mode === 'note') setNote(parseObservation(t, settings.categories));
-      else setLegs(parseRouteText(t));
+      else setLegs(parseRouteText(t, types));
     }
     setVia(usedAi ? 'ai' : 'local');
-    setPhase('result');
     pickStartFromText(t);
+    await tryPlaces(t);
+    setPhase('result');
+  }
+
+  // ------------------------------------------------ Straßen / Hausnummern / Kreuzungen
+  function startContext(ref = startRef) {
+    const sp = ref && ref !== 'gps' && ref !== 'none' ? insp.route.points.find((p) => p.id === ref && p.position) : null;
+    if (sp) return { pos: sp.position!, label: `${pointDisplayName(sp)}${sp.title ? ' – ' + sp.title : ''}`, pointId: sp.id };
+    if (ref === 'gps' && fix) return { pos: { lat: fix.lat, lng: fix.lng }, label: 'Mein Standort (GPS)', pointId: null };
+    return null;
+  }
+
+  async function tryPlaces(t: string, ref = startRef, follow = followStreets) {
+    setPlaceError('');
+    if (mode !== 'route' || !settings.placeSearch || !hasPlaces(t)) { setPlaces(null); return; }
+    const pieces = parsePlaces(t, types);
+    if (!pieces.length) { setPlaces(null); return; }
+    if (!navigator.onLine) {
+      setPlaces(null);
+      setPlaceError('Straßen/Hausnummern erkannt – die Adresssuche braucht aber Internet. Bitte später erneut „Auswerten“.');
+      return;
+    }
+    setPhase('processing');
+    try {
+      const start = startContext(ref);
+      const near = start?.pos ?? (fix ? { lat: fix.lat, lng: fix.lng } : null) ?? insp.route.points.find((p) => p.position)?.position ?? null;
+      setPlaces(await resolvePieces(pieces, { near, city: insp.meta.site, start, followStreets: follow, onProgress: setProgress }));
+    } catch (e) {
+      setPlaces(null);
+      setPlaceError(errorText(e));
+    } finally {
+      setProgress('');
+      setPhase('result');
+    }
+  }
+
+  function applyPlaces() {
+    if (!places) return;
+    let res = { segments: 0, points: 0 };
+    useInspection.getState().mutate((d) => { res = applyResolved(d, places, types); });
+    toast(`${res.segments} farbige${res.segments === 1 ? 'r Abschnitt' : ' Abschnitte'} mit ${res.points} Punkten eingezeichnet (automatisch ermittelt).`, 'success', {
+      label: 'Rückgängig', run: () => useInspection.getState().undo(),
+    });
+    close();
+    navigate(`/i/${insp.id}/map`, true);
   }
 
   /** „Vom Startpunkt …“ → am Startpunkt der Trasse beginnen */
@@ -188,12 +242,12 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
     let unplaced = 0;
     useInspection.getState().mutate((d) => {
       if (startRef !== 'gps' && startRef !== 'none') {
-        const r = applyLegs(d, legs, startRef, null);
+        const r = applyLegs(d, legs, startRef, null, types);
         created = r.created.length; unplaced = r.unplaced;
       } else {
         // bei leerem aktiven Abschnitt dort beginnen, sonst neuen Abschnitt anlegen
         if (activeSegment(d).pointIds.length) newEmptySegment(d);
-        const r = applyLegs(d, legs, null, startRef === 'gps' ? startFix : null);
+        const r = applyLegs(d, legs, null, startRef === 'gps' ? startFix : null, types);
         created = r.created.length; unplaced = r.unplaced;
       }
     });
@@ -253,7 +307,7 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
           </>
         )}
 
-        {phase === 'processing' && <div className="loading-full"><Spinner large /><div>Wird ausgewertet …</div></div>}
+        {phase === 'processing' && <div className="loading-full"><Spinner large /><div>{progress || 'Wird ausgewertet …'}</div></div>}
 
         {phase === 'result' && (
           <>
@@ -275,13 +329,24 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
             )}
             {mode === 'note' && <button className="btn primary big block" onClick={saveNote}>Beobachtung speichern</button>}
 
-            {mode === 'route' && (
+            {mode === 'route' && placeError && <Banner>{placeError}</Banner>}
+            {mode === 'route' && places && places.length > 0 && !preferLegs && (
+              <PlaceResults places={places} types={types}
+                onType={(id, key) => setPlaces(places.map((p) => (p.piece.id === id ? { ...p, piece: { ...p.piece, lineType: key || null, lineWord: key ? lineTypeOf(types, key).label : '' } } : p)))}
+                onRemove={(id) => setPlaces(places.filter((p) => p.piece.id !== id))}
+                startRef={startRef} startOptions={startOptions}
+                onStart={(v) => { setStartRef(v); void tryPlaces(text, v, followStreets); }}
+                follow={followStreets} onFollow={(v) => { setFollowStreets(v); void tryPlaces(text, startRef, v); }}
+                onApply={applyPlaces}
+                onLegs={legs.length ? () => setPreferLegs(true) : null} />
+            )}
+            {mode === 'route' && (!places || !places.length || preferLegs) && (
               <>
                 {legs.length === 0 ? (
                   <Banner>Im Text wurden keine Wegabschnitte erkannt. Formulierung wie „30 Meter nach Norden, dann links 80 Meter“ verwenden.</Banner>
                 ) : (
                   <div className="list">
-                    {legs.map((l, i) => <LegEditor key={l.id} n={i + 1} leg={l} onChange={(nl) => setLegs(legs.map((x) => (x.id === l.id ? nl : x)))} onRemove={() => setLegs(legs.filter((x) => x.id !== l.id))} />)}
+                    {legs.map((l, i) => <LegEditor key={l.id} n={i + 1} leg={l} types={types} onChange={(nl) => setLegs(legs.map((x) => (x.id === l.id ? nl : x)))} onRemove={() => setLegs(legs.filter((x) => x.id !== l.id))} />)}
                   </div>
                 )}
                 <div className="list">
@@ -316,11 +381,12 @@ function NoteResult({ note, setNote, categories }: { note: NoteDraft; setNote: (
 const DIRS = Object.keys(DIRECTION_LABEL) as Direction[];
 const TURNS = Object.keys(TURN_LABEL) as Turn[];
 
-function LegEditor({ n, leg, onChange, onRemove }: { n: number; leg: RouteLeg; onChange: (l: RouteLeg) => void; onRemove: () => void }) {
+function LegEditor({ n, leg, types, onChange, onRemove }: { n: number; leg: RouteLeg; types: LineType[]; onChange: (l: RouteLeg) => void; onRemove: () => void }) {
   const dirValue = leg.direction ? `d:${leg.direction}` : leg.turn ? `t:${leg.turn}` : '';
+  const lt = leg.lineType ? lineTypeOf(types, leg.lineType) : null;
   return (
     <div className="leg">
-      <div className="leg-n">{n}</div>
+      <div className="leg-n" style={lt ? { background: lt.color, color: '#fff', borderColor: '#fff' } : undefined}>{n}</div>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{legSummary(leg)}</div>
         {leg.text && <div className="small muted">„{leg.text}“</div>}
@@ -338,10 +404,59 @@ function LegEditor({ n, leg, onChange, onRemove }: { n: number; leg: RouteLeg; o
             const v = parseFloat(e.target.value.replace(',', '.'));
             onChange({ ...leg, distanceM: isFinite(v) && v > 0 ? v : null });
           }} />
+          <select style={{ gridColumn: '1 / -1' }} aria-label="Linienart" value={leg.lineType ?? ''} onChange={(e) => onChange({ ...leg, lineType: e.target.value || null, lineWord: e.target.value ? lineTypeOf(types, e.target.value).label : '' })}>
+            <option value="">Linienart: Standard</option>
+            {types.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+          </select>
           <input style={{ gridColumn: '1 / -1' }} placeholder="Wegmarke (z. B. Graben)" aria-label="Wegmarke" value={leg.landmark} onChange={(e) => onChange({ ...leg, landmark: e.target.value })} />
         </div>
       </div>
       <button className="icon-btn" aria-label="Abschnitt entfernen" onClick={onRemove}><Trash2 size={18} color="var(--danger)" /></button>
     </div>
+  );
+}
+
+function PlaceResults(props: {
+  places: ResolvedPiece[]; types: LineType[]; startRef: string; startOptions: { value: string; label: string }[]; follow: boolean;
+  onType: (id: string, key: string) => void; onRemove: (id: string) => void; onStart: (v: string) => void; onFollow: (v: boolean) => void;
+  onApply: () => void; onLegs: (() => void) | null;
+}) {
+  const usable = props.places.filter((p) => p.path.length > 0);
+  return (
+    <>
+      <div className="list">
+        {props.places.map((r, i) => {
+          const t = r.piece.lineType ? lineTypeOf(props.types, r.piece.lineType) : null;
+          return (
+            <div key={r.piece.id} className="leg">
+              <div className="leg-n" style={{ background: t?.color ?? 'var(--route)', color: '#fff', borderColor: '#fff' }}>{i + 1}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600 }}>{r.piece.lineWord || t?.label || 'Trasse'}: {r.from?.label ?? '–'} → {r.to?.label ?? (placeLabel(r.piece.to) || '–')}</div>
+                <div className="small muted">„{r.piece.text}“</div>
+                {r.piece.along && <div className="small muted">entlang {r.piece.along}{r.routed ? ' · folgt dem Wegenetz' : ''}</div>}
+                {[r.from?.note, r.to?.note].filter(Boolean).map((n) => <div key={n} className="small muted">{n}</div>)}
+                {r.problems.map((p) => <div key={p} className="small" style={{ color: 'var(--warn)' }}>⚠ {p}</div>)}
+                <div className="leg-edit">
+                  <select style={{ gridColumn: '1 / -1' }} aria-label="Linienart" value={r.piece.lineType ?? ''} onChange={(e) => props.onType(r.piece.id, e.target.value)}>
+                    <option value="">Linienart: Standard</option>
+                    {props.types.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <button className="icon-btn" aria-label="Stück entfernen" onClick={() => props.onRemove(r.piece.id)}><Trash2 size={18} color="var(--danger)" /></button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="list">
+        <SelectField label="Beginnen (wenn kein „von …“ genannt)" value={props.startRef} onChange={props.onStart} options={props.startOptions} />
+        <SwitchRow title="Dem Straßenverlauf folgen" sub="Linie entlang des Wegenetzes statt gerade" checked={props.follow} onChange={props.onFollow} />
+      </div>
+      <Banner icon={<MapPinned size={20} />}>
+        Orte aus <b>OpenStreetMap</b>. Die Linien sind <b>automatisch ermittelt</b> (gestrichelt) – die tatsächliche Lage der Leitung vor Ort prüfen und bestätigen.
+      </Banner>
+      <button className="btn primary big block" disabled={!usable.length} onClick={props.onApply}>Auf Karte übernehmen ({usable.length})</button>
+      {props.onLegs && <button className="btn sm plain block" onClick={props.onLegs}>Stattdessen als Richtungsangaben auswerten</button>}
+    </>
   );
 }

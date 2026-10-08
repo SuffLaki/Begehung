@@ -115,7 +115,8 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
 
   function caption(f: PhotoMeta): string {
     const parts = [`Foto ${f.number}`, time(f.takenAt)];
-    if (f.position) parts.push(`GPS ${coord(f.position.lat, f.position.lng)}${f.position.accuracy ? ` (±${Math.round(f.position.accuracy)} m)` : ''}`);
+    if (f.placeLabel) parts.push(f.placeLabel);
+    if (f.position) parts.push(`${f.positionSource === 'address' ? 'Position aus Adresse' : 'GPS'} ${coord(f.position.lat, f.position.lng)}${f.position.accuracy ? ` (±${Math.round(f.position.accuracy)} m)` : ''}`);
     if (f.pointId) parts.push(`Punkt ${pointName(f.pointId)}`);
     const lines = f.annotations?.length ? `\nEingezeichnet: ${legendText(f.annotations, settings.lineTypes)}` : '';
     return parts.join(' · ') + (f.description ? `\n${f.description}` : '') + lines;
@@ -219,6 +220,20 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
         const c = ps.colored ? hex(seg.color) : rgb(0.07, 0.07, 0.07);
         L.page.drawRectangle({ x: L.left, y: L.y + 2, width: 22, height: 4, color: c });
         L.at(`${seg.name} – ${formatDistance(pathLength(segmentPositions(insp.route, seg.pointIds)))}, ${seg.pointIds.length} Punkte`, L.left + 30, L.y, 8.5);
+      }
+      // Bedeutung der Farben (Linienarten)
+      const usedTypes = [...new Set(insp.route.segments.map((s) => s.lineType).filter(Boolean))] as string[];
+      if (usedTypes.length && ps.colored) {
+        L.y -= 4;
+        const parts = usedTypes.map((k) => settings.lineTypes.find((t) => t.key === k)).filter(Boolean);
+        let x = L.left;
+        L.ensure(14);
+        L.y -= 12;
+        for (const t of parts) {
+          L.page.drawRectangle({ x, y: L.y + 1, width: 18, height: 6, color: hex(t!.color) });
+          L.at(t!.label, x + 24, L.y, 8.5, L.bold);
+          x += 24 + L.bold.widthOfTextAtSize(san(t!.label), 8.5) + 18;
+        }
       }
       L.y -= 6;
       L.ensure(30);

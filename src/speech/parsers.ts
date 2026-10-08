@@ -2,8 +2,9 @@
 // Grundsatz: Es wird nur übernommen, was wörtlich im Text steht. Was fehlt,
 // bleibt leer (z. B. Entfernung unbekannt → Punkt wird nicht platziert).
 
-import type { Inspection, LatLng, RoutePoint } from '../model/types';
-import { addRoutePoint, headingInto, segmentEndingAt, branchFrom } from '../geo/routeOps';
+import type { Inspection, LatLng, LineType, RoutePoint } from '../model/types';
+import { activeSegment, addRoutePoint, headingInto, newEmptySegment, segmentEndingAt, branchFrom } from '../geo/routeOps';
+import { lineTypeOf, matchLineTypes } from '../annotate/lines';
 import { destination, compass } from '../geo/geo';
 
 export type Direction = 'N' | 'NO' | 'O' | 'SO' | 'S' | 'SW' | 'W' | 'NW';
@@ -22,6 +23,9 @@ export interface RouteLeg {
   /** Verlauf entlang … („entlang des Feldweges“) */
   along: string;
   note: string;
+  /** Linienart (Farbe), z. B. „tiefbau“ – aus Schlüsselwort oder vom vorigen Abschnitt übernommen */
+  lineType?: string | null;
+  lineWord?: string;
 }
 
 export const DIRECTION_DEG: Record<Direction, number> = { N: 0, NO: 45, O: 90, SO: 135, S: 180, SW: 225, W: 270, NW: 315 };
@@ -131,12 +135,15 @@ export function refersToStart(text: string): boolean {
 
 let legSeq = 0;
 
-export function parseRouteText(input: string): RouteLeg[] {
+export function parseRouteText(input: string, types: LineType[] = []): RouteLeg[] {
   const text = stripAbbrevDots(wordsToDigits(input.replace(/\s+/g, ' ').trim()));
   if (!text) return [];
   const chunks = text.split(CONNECTORS).map((c) => c.trim()).filter((c) => c.length > 1);
   const legs: RouteLeg[] = [];
+  let lastType: { key: string; word: string } | null = null;
   for (const chunk of chunks) {
+    const lt = matchLineTypes(chunk, types)[0];
+    if (lt) lastType = { key: lt.type.key, word: lt.word };
     const clean = chunk.replace(/^(vom|von\s+(?:dem|der))\s+(startpunkt|start|anfang|ausgangspunkt)\s*/i, '');
     const dist = parseDistance(clean);
     const leg: RouteLeg = {
@@ -149,6 +156,8 @@ export function parseRouteText(input: string): RouteLeg[] {
       landmark: parseLandmark(clean),
       along: parseAlong(clean),
       note: '',
+      lineType: lastType?.key ?? null,
+      lineWord: lastType?.word ?? '',
     };
     // Bruchstücke ohne jede verwertbare Angabe an den vorigen Abschnitt hängen
     const empty = !leg.direction && !leg.turn && leg.distanceM === null && !leg.landmark && !leg.along;
@@ -162,6 +171,16 @@ export function parseRouteText(input: string): RouteLeg[] {
     legs.push(leg);
   }
   return legs;
+}
+
+/** Linienart je Abschnitt aus dem Originaltext bestimmen (z. B. nach KI-Auswertung) */
+export function assignLineTypes(legs: RouteLeg[], types: LineType[]): RouteLeg[] {
+  let last: { key: string; word: string } | null = null;
+  return legs.map((l) => {
+    const m = matchLineTypes(l.text, types)[0];
+    if (m) last = { key: m.type.key, word: m.word };
+    return { ...l, lineType: last?.key ?? null, lineWord: last?.word ?? '' };
+  });
 }
 
 export function legSummary(l: RouteLeg): string {
@@ -185,7 +204,7 @@ export interface ApplyResult {
  * berechnet werden (Richtung oder Entfernung fehlt), wird der Punkt ohne
  * Position angelegt – ebenso alle folgenden, weil der Bezug fehlt.
  */
-export function applyLegs(d: Inspection, legs: RouteLeg[], startPointId: string | null, startFix: LatLng | null): ApplyResult {
+export function applyLegs(d: Inspection, legs: RouteLeg[], startPointId: string | null, startFix: LatLng | null, types: LineType[] = []): ApplyResult {
   const created: RoutePoint[] = [];
   let unplaced = 0;
   let prevPos: LatLng | null = null;
@@ -208,6 +227,18 @@ export function applyLegs(d: Inspection, legs: RouteLeg[], startPointId: string 
   }
 
   for (const l of legs) {
+    // Wechsel der Linienart (z. B. Tiefbau → Leerrohr) = neuer, farbiger Abschnitt ab dem letzten Punkt
+    if (l.lineType) {
+      const seg = activeSegment(d);
+      if (seg.lineType !== l.lineType) {
+        const t = lineTypeOf(types, l.lineType);
+        const target = seg.pointIds.length > (prevId && seg.pointIds[0] === prevId ? 1 : 0) ? newEmptySegment(d) : seg;
+        if (target !== seg && prevId) target.pointIds.push(prevId);
+        target.color = t.color;
+        target.lineType = t.key;
+        target.name = `${l.lineWord || t.label} ${d.route.segments.filter((s) => s.lineType === t.key).length}`;
+      }
+    }
     let bear: number | null = null;
     if (l.direction) bear = DIRECTION_DEG[l.direction];
     else if (l.turn && heading !== null) bear = (heading + TURN_DEG[l.turn] + 360) % 360;

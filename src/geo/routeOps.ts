@@ -247,6 +247,8 @@ export function segmentsOfPoint(d: Inspection, pointId: string): RouteSegment[] 
  */
 export function isRelevantPoint(d: Inspection, p: RoutePoint, startIds: Set<string>, endIds: Set<string>): boolean {
   if (p.kind === 'marker') return true;
+  const hasContent = !!(p.title || p.description && !p.vertex || p.label || p.category || p.station);
+  if (p.vertex && !hasContent && !startIds.has(p.id) && !endIds.has(p.id) && !d.photos.some((f) => f.pointId === p.id) && !d.notes.some((n) => n.pointId === p.id)) return false;
   if (p.source !== 'gps' || !p.confirmed) return true;
   if (startIds.has(p.id) || endIds.has(p.id)) return true;
   if (p.title || p.description || p.label || p.category || p.station) return true;

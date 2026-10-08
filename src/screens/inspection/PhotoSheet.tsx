@@ -123,7 +123,8 @@ export default function PhotoSheet() {
 
         <div className="list">
           <Row title="Aufgenommen" value={fmtDateTime(f.takenAt)} chevron={false} />
-          <Row title="GPS" value={f.position ? formatCoord(f.position) : 'keine Position'} chevron={false} />
+          <Row title={f.positionSource === 'address' ? 'Position (aus Adresse)' : 'GPS'} value={f.position ? formatCoord(f.position) : 'keine Position'} chevron={false} />
+          {f.placeLabel && <Row title="Ort" value={f.placeLabel} chevron={false} />}
           {f.position && <Row title="Genauigkeit" value={acc.text} chevron={false} />}
           <Row title="Größe" value={`${f.width} × ${f.height} px`} chevron={false} />
         </div>

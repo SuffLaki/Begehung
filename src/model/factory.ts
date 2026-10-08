@@ -208,6 +208,7 @@ export function defaultSettings(): Settings {
     },
     defaultMapType: 'streets',
     lineTypes: DEFAULT_LINE_TYPES.map((t) => ({ ...t, keywords: [...t.keywords] })),
+    placeSearch: true,
   };
 }
 

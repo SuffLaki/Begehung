@@ -132,6 +132,11 @@ export default function SettingsScreen() {
         <LineTypesEditor />
         <div className="group-foot">Beim Markieren eines Fotos wählt das gesagte/getippte Wort die Linie. Mehrere Wörter mit Komma trennen.</div>
 
+        <div className="list" style={{ marginTop: 12 }}>
+          <SwitchRow title="Adresssuche (OpenStreetMap)" sub="Straßen, Hausnummern und Kreuzungen in Spracheingaben auf der Karte suchen und einzeichnen" checked={s.placeSearch} onChange={(v) => commit((x) => { x.placeSearch = v; })} />
+        </div>
+        <div className="group-foot">Dabei werden nur die genannten Straßennamen und der ungefähre Suchbereich an OpenStreetMap gesendet. Funktioniert nur online.</div>
+
         {/* ------------------------------------------------ KI */}
         <div className="group-title">KI-Assistent</div>
         <div className="list">

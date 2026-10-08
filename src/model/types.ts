@@ -96,6 +96,8 @@ export interface RoutePoint {
   source: Source;
   /** false = automatisch ermittelt und vom Benutzer noch nicht bestätigt */
   confirmed: boolean;
+  /** reiner Stützpunkt des Linienverlaufs (z. B. aus Routing) – ohne eigene Nummer in Karte/PDF */
+  vertex?: boolean;
   /** Nachvollziehbarkeit für geschätzte Punkte */
   estimate?: {
     text: string;
@@ -115,6 +117,8 @@ export interface RouteSegment {
   pointIds: ID[];
   source: Source;
   createdAt: number;
+  /** Linienart (Farbe/Bedeutung), z. B. „tiefbau“ */
+  lineType?: string;
 }
 
 export interface TrackFix {
@@ -182,6 +186,10 @@ export interface PhotoMeta {
   aiSuggestion: string;
   width: number;
   height: number;
+  /** 'address' = Position aus erkannter Adresse (OpenStreetMap), nicht vom GPS */
+  positionSource?: 'gps' | 'address';
+  /** Ort, der beim Markieren genannt wurde (z. B. „Hauptstraße 12“) */
+  placeLabel?: string;
   /** eingezeichnete Linien (Vektordaten – das Originalfoto bleibt unverändert) */
   annotations?: PhotoAnnotation[];
 }
@@ -368,6 +376,8 @@ export interface Settings {
   mail: MailDefaults;
   defaultMapType: MapType;
   lineTypes: LineType[];
+  /** Adresssuche über OpenStreetMap (Straßen, Hausnummern, Kreuzungen) */
+  placeSearch: boolean;
 }
 
 export type JobType = 'voice-note' | 'voice-route';

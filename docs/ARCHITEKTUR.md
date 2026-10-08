@@ -105,6 +105,20 @@ markiert. Fehlt Richtung oder Entfernung, wird **keine** Position erfunden – d
   Zusammenfassungen kommen nur bestätigt ins PDF.
 * Datenschutz: Fotos/Audio nur nach Freigabe in den Einstellungen; GPS-Koordinaten werden nie an die KI gesendet.
 
+## Straßen, Hausnummern, Kreuzungen (Adresssuche)
+
+* `places/placeParser.ts` erkennt im Text Straßennamen (Endungen wie -straße, -weg, -gasse … sowie „Am …“, „Neue Straße“),
+  Hausnummern, „Kreuzung/Ecke X und Y“, „von … bis …“, „entlang der …“ und die Linienart (Tiefbau, Leerrohr …).
+* `places/osm.ts`: Nominatim (Adresse → Koordinate, Straßengeometrie; max. 1 Anfrage/s, Cache), Kreuzung =
+  nächste Annäherung beider Straßenlinien (< 25 m), Verlauf über routing.openstreetmap.de (Fußweg-Profil).
+  Gesucht wird im Umkreis von ca. 8 km um den letzten Punkt/GPS, sonst mit dem Ort aus „Baustelle / Bereich“.
+* `places/resolve.ts`: legt pro Stück einen farbigen Abschnitt an (Farbe/Name aus der Linienart), Start/Ziel als
+  benannte Punkte, Routing-Zwischenpunkte als Stützpunkte (`vertex`). Alles `confirmed: false`.
+  Hausnummer nicht im Kartenbestand → „nur Straße gefunden“ wird angezeigt; nicht gefundene Orte werden nicht eingezeichnet.
+* Foto-Linien: derselbe Erkenner liefert den Ort für die Beschriftung („Leerrohr – Olgastraße 100“) und ordnet
+  das Foto auf Wunsch dem nächsten Trassenpunkt (≤ 30 m) zu bzw. verortet es (`positionSource: 'address'`).
+* Abschaltbar in den Einstellungen (Adresssuche). Funktioniert nur online.
+
 ## Foto-Markierungen (Linien)
 
 * `PhotoMeta.annotations`: Polylinien normiert auf 0..1, mit Linienart und Beschriftung; das Originalfoto bleibt unverändert.
@@ -160,6 +174,7 @@ Bis dahin: Sicherung pro Begehung als Datei (inkl. Fotos) exportieren/importiere
 | Offline-Karten | kein Vorab-Download ganzer Gebiete (OSM-Nutzungsregeln) | angesehene Kacheln werden gespeichert; PDF-Karte offline nur Geometrie |
 | Speicher | iOS kann Daten nicht genutzter Web-Apps löschen; Kontingent begrenzt | `navigator.storage.persist()`, Fotos auf 2048 px verkleinert, Sicherungsexport |
 | Verschlüsselung | keine sichere Schlüsselablage im Browser ohne Passwort-Eingabe | Daten liegen im App-Speicher, durch die iOS-Gerätesperre verschlüsselt; App-PIN wäre nächster Ausbauschritt |
+| Adresssuche | braucht Internet; OSM-Daten können lückenhaft sein (fehlende Hausnummern) | Status je Ort sichtbar, nichts wird geraten |
 | Hintergrund-Sync | iOS unterstützt Background Sync nicht | Warteschlange wird beim Öffnen/Online-Werden abgearbeitet |
 
 ## Entwicklung

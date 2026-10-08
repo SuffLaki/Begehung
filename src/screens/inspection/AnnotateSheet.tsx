@@ -3,7 +3,11 @@
 // Verlauf: mit dem Finger ziehen (Freihand oder gerade) oder als KI-Vorschlag.
 
 import { useEffect, useRef, useState } from 'react';
-import { Mic, Square, Sparkles, Trash2, Undo2, Check, X, Spline, Minus } from 'lucide-react';
+import { Mic, Square, Sparkles, Trash2, Undo2, Check, X, Spline, Minus, MapPin } from 'lucide-react';
+import { firstPlace, placeLabel, type PlaceRef } from '../../places/placeParser';
+import { resolvePlace } from '../../places/resolve';
+import { nearestPoint } from '../../geo/geo';
+import { pointDisplayName } from '../../model/factory';
 import { useInspection } from '../../state/inspectionStore';
 import { useApp, toast, errorText } from '../../state/appStore';
 import type { PhotoAnnotation } from '../../model/types';
@@ -39,7 +43,8 @@ function AnnotateInner({ id }: { id: string }) {
   const [text, setText] = useState('');
   const [drawing, setDrawing] = useState<[number, number][] | null>(null);
   const [suggestions, setSuggestions] = useState<PhotoAnnotation[]>([]);
-  const [busy, setBusy] = useState<'ai' | 'rec' | 'stt' | null>(null);
+  const [busy, setBusy] = useState<'ai' | 'rec' | 'stt' | 'place' | null>(null);
+  const [place, setPlace] = useState<PlaceRef | null>(null);
   const [recSecs, setRecSecs] = useState(0);
   const svgRef = useRef<SVGSVGElement>(null);
   const recRef = useRef<WavRecorder | null>(null);
@@ -76,8 +81,12 @@ function AnnotateInner({ id }: { id: string }) {
       if (announce) toast('Kein bekanntes Wort erkannt (z. B. „Tiefbau“, „Leerrohr“). Weitere Wörter: Einstellungen → Linienarten.', 'error');
       return;
     }
+    // Straße/Hausnummer/Kreuzung im selben Satz → in die Beschriftung übernehmen
+    const pl = settings.placeSearch ? firstPlace(t, types) : null;
+    setPlace(pl);
+    const where = pl ? ` – ${placeLabel(pl)}` : '';
     setTypeKey(m[0].type.key);
-    setLabels((l) => ({ ...l, ...Object.fromEntries(m.map((x) => [x.type.key, x.word])) }));
+    setLabels((l) => ({ ...l, ...Object.fromEntries(m.map((x) => [x.type.key, x.word + where])) }));
     if (announce) toast(`Linie „${m[0].word}“ (${colorName(m[0].type.color)}) – jetzt mit dem Finger einzeichnen.`, 'success');
   }
 
@@ -113,6 +122,32 @@ function AnnotateInner({ id }: { id: string }) {
       setBusy('rec');
     } catch (e) {
       toast(errorText(e), 'error');
+    }
+  }
+
+  /** Foto dem genannten Ort zuordnen: nächster Trassenpunkt (≤ 30 m) bzw. Position aus der Adresse */
+  async function locatePhoto() {
+    if (!place || !photo) return;
+    setBusy('place');
+    try {
+      const near = photo.position ?? insp.route.points.find((p) => p.position)?.position ?? null;
+      const r = await resolvePlace(place, near ? { lat: near.lat, lng: near.lng } : null, insp.meta.site);
+      if (!r.result) { toast(r.error, 'error'); return; }
+      const pos = r.result.pos;
+      const pt = nearestPoint(insp.route.points, pos, 30);
+      useInspection.getState().mutate((d) => {
+        const f = d.photos.find((x) => x.id === id);
+        if (!f) return;
+        f.placeLabel = r.result!.label;
+        if (pt) { f.pointId = pt.id; f.pointAutoAssigned = false; }
+        if (!f.position) { f.position = { lat: pos.lat, lng: pos.lng, accuracy: null, timestamp: Date.now() }; f.positionSource = 'address'; }
+      });
+      const precision = r.result.precision === 'street' ? ' (nur Straße gefunden – Lage ungenau)' : '';
+      toast(pt ? `Foto ${photo.number} → ${pointDisplayName(pt)} (${r.result.label})${precision}` : photo.position ? `Ort „${r.result.label}“ vermerkt – kein Trassenpunkt in 30 m Nähe.` : `Foto ${photo.number} bei „${r.result.label}“ verortet${precision}.`, 'success');
+    } catch (e) {
+      toast(errorText(e), 'error');
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -207,8 +242,14 @@ function AnnotateInner({ id }: { id: string }) {
         </div>
         {busy === 'rec' && <div className="small center" style={{ color: 'var(--danger)' }}>Aufnahme läuft · {Math.floor(recSecs)} s – erneut tippen zum Beenden</div>}
         {matches.length > 0 && (
-          <div className="small muted">Erkannt: {matches.map((m) => `${m.word} (${colorName(m.type.color)})`).join(', ')}</div>
+          <div className="small muted">Erkannt: {matches.map((m) => `${m.word} (${colorName(m.type.color)})`).join(', ')}{place ? ` · Ort: ${placeLabel(place)}` : ''}</div>
         )}
+        {place && (
+          <button className="btn block" onClick={() => void locatePhoto()} disabled={busy !== null || !online}>
+            {busy === 'place' ? <><Spinner />Ort wird gesucht …</> : <><MapPin size={18} />Foto „{placeLabel(place)}“ zuordnen</>}
+          </button>
+        )}
+        {place && !online && <div className="small muted">Ortssuche braucht Internet.</div>}
         {canSuggest ? (
           <button className="btn block" onClick={suggest} disabled={!matches.length || busy !== null}>
             {busy === 'ai' ? <><Spinner />KI sucht den Verlauf …</> : <><Sparkles size={18} />Verlauf von KI vorschlagen lassen</>}
