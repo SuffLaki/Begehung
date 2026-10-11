@@ -1,7 +1,7 @@
 // PDF-Vorschau mit Blättern, Erstellen, Teilen und E-Mail.
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, Pencil, Share2, Mail, Check, AlertTriangle, Copy } from 'lucide-react';
+import { ChevronLeft, Pencil, Share2, Mail, Check, AlertTriangle, Copy, Download, Users } from 'lucide-react';
 import { useInspection } from '../state/inspectionStore';
 import { useApp, toast, errorText } from '../state/appStore';
 import { navigate } from '../router';
@@ -11,7 +11,7 @@ import { renderPdfPages, releasePages, type RenderedPage } from '../pdf/preview'
 import { getTemplate, saveReport } from '../storage/db';
 import { uid } from '../model/factory';
 import type { MailDefaults, Report } from '../model/types';
-import { canShareFiles, copyText, mailDraft, mailtoUrl, shareFile } from '../share/share';
+import { canShareFiles, copyText, isAppleTouch, mailDraft, mailtoUrl, saveLocally, shareFile } from '../share/share';
 
 export default function PdfPreview({ id }: { id: string }) {
   const insp = useInspection((s) => s.insp);
@@ -112,7 +112,19 @@ export default function PdfPreview({ id }: { id: string }) {
           </button>
           <button className="btn primary" disabled={!pdf} onClick={share}><Share2 size={18} />Teilen</button>
         </div>
-        <button className="btn block" disabled={!pdf} onClick={() => setMailOpen(true)}><Mail size={18} />Per E-Mail senden</button>
+        <div className="btn-row">
+          <button className="btn" disabled={!pdf} onClick={() => {
+            if (!pdf) return;
+            const p = saveLocally(pdf.blob, pdf.fileName);
+            void store();
+            p.then((r) => {
+              if (r === 'downloaded') toast(`„${pdf.fileName}“ im Download-Ordner gespeichert.`, 'success');
+              if (r === 'shared') toast('Gespeichert.', 'success');
+            }).catch((e) => toast(errorText(e), 'error'));
+          }}><Download size={18} />Lokal speichern</button>
+          <button className="btn" disabled={!pdf} onClick={() => setMailOpen(true)}><Mail size={18} />Per E-Mail senden</button>
+        </div>
+        {isAppleTouch() && <div className="tiny muted center">iPhone: „Lokal speichern“ öffnet das Teilen-Menü → „In Dateien sichern“.</div>}
         {!canShareFiles() && <div className="tiny muted center">Dieser Browser kann keine Dateien teilen – „Teilen“ lädt die PDF herunter.</div>}
       </div>
       {mailOpen && pdf && insp && <MailSheet blob={pdf.blob} fileName={pdf.fileName} onClose={() => setMailOpen(false)} onShared={() => void store()} defaults={settings.mail} />}
@@ -152,6 +164,13 @@ export function MailSheet(props: { blob?: Blob; fileName?: string; report?: Repo
       <div className="stack">
         <div className="list">
           <Field label="An" type="email" value={m.to} onChange={(v) => setM({ ...m, to: v })} placeholder="name@firma.de, …" inputMode="email" />
+          {(insp.meta.participants ?? []).some((p) => p.email) && (
+            <button className="row" onClick={() => {
+              const mails = (insp.meta.participants ?? []).map((p) => p.email.trim()).filter(Boolean);
+              const cur = m.to.split(/[,;]\s*/).map((x) => x.trim()).filter(Boolean);
+              setM({ ...m, to: [...new Set([...cur, ...mails])].join(', ') });
+            }}><Users size={18} color="var(--accent)" /><div className="row-main"><div className="row-title" style={{ color: 'var(--accent)' }}>Teilnehmer als Empfänger eintragen</div></div></button>
+          )}
           <Field label="CC" type="email" value={m.cc} onChange={(v) => setM({ ...m, cc: v })} inputMode="email" />
           <Field label="Betreff" value={m.subject} onChange={(v) => setM({ ...m, subject: v })} />
           <Field label="Nachricht" multiline rows={6} value={m.body} onChange={(v) => setM({ ...m, body: v })} />

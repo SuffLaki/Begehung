@@ -152,6 +152,26 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
       ['Startpunkt', m.startPoint],
       ['Status', insp.status === 'completed' ? `abgeschlossen${insp.completedAt ? ` am ${time(insp.completedAt)}` : ''}` : 'in Bearbeitung (Entwurf)'],
     ], 125, 10);
+    const tn = (m.participants ?? []).filter((p) => p.name || p.company);
+    if (tn.length) {
+      L.space(12);
+      L.text('Teilnehmer', { size: 9, font: L.bold, color: C.muted, after: 3 });
+      const cols = [0, 0.27, 0.55, 0.73];
+      const heads = ['Name', 'Betrieb / Firma', 'Telefon', 'E-Mail'];
+      L.ensure(16);
+      L.y -= 11;
+      heads.forEach((h, i) => L.at(h, L.left + cols[i] * L.width, L.y, 8, L.bold, C.muted));
+      L.y -= 4;
+      L.hr();
+      for (const p of tn) {
+        const vals = [p.name, p.company, p.phone, p.email];
+        L.ensure(14);
+        L.y -= 12;
+        vals.forEach((v, i) => L.at(v, L.left + cols[i] * L.width, L.y, 8.5, L.font, C.text, ((cols[i + 1] ?? 1) - cols[i]) * L.width - 6));
+        L.y -= 3;
+        L.page.drawLine({ start: { x: L.left, y: L.y }, end: { x: L.right, y: L.y }, thickness: 0.4, color: C.line });
+      }
+    }
     if (m.description) {
       L.space(10);
       L.text('Beschreibung', { size: 9, font: L.bold, color: C.muted, after: 2 });

@@ -46,7 +46,7 @@ export function emptyMeta(): InspectionMeta {
   const { date, time } = today();
   return {
     projectName: '', projectNumber: '', inspectionNumber: '', date, time, inspector: '', client: '',
-    contactPerson: '', site: '', description: '', startPoint: '', remarks: '',
+    contactPerson: '', site: '', description: '', startPoint: '', remarks: '', participants: [],
   };
 }
 

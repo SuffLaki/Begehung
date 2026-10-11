@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // lokale Vorschau ohne Offline-Zwischenspeicher, damit immer der neueste Stand zu sehen ist
+      disable: !!process.env.VITE_PREVIEW_BANNER,
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       includeAssets: ['icons/*.png'],

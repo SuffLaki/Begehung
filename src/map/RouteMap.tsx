@@ -5,12 +5,12 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { GeoFix, Inspection, LatLng, MapBounds, MapType } from '../model/types';
+import type { GeoFix, Inspection, LatLng, MapBounds, MapType, PlanGeoref } from '../model/types';
 import { MAP_TYPES, MAX_ZOOM } from './providers';
 import { endpoints, isRelevantPoint } from '../geo/routeOps';
 import { pointDisplayName, SYMBOLS } from '../model/factory';
 import { boundsOf } from '../geo/geo';
-import { usePlanUrl } from '../plans/plans';
+import { dragHandleGeoref, georefBR, georefCenter, initialGeoref, recenterGeoref, usePlanUrl } from '../plans/plans';
 
 export type MapTool = 'none' | 'addPoint' | 'addMarker' | 'place' | 'measure';
 
@@ -44,6 +44,13 @@ interface Props {
   plan?: { id: string; width: number; height: number } | null;
   /** temporäre Hilfslinie (z. B. Strecke messen) */
   extraLine?: LatLng[];
+  /** eingepasster Plan als halbtransparente Ebene über der Landkarte */
+  overlay?: { id: string; width: number; height: number; metersPerPx: number | null; georef: PlanGeoref | null; opacity: number } | null;
+  /** Einpassen-Modus: Griffe zum Verschieben/Drehen/Skalieren anzeigen */
+  adjustOverlay?: boolean;
+  onOverlayChange?(g: PlanGeoref): void;
+  /** Zähler: bei Änderung Plan in die Kartenmitte holen */
+  recenterOverlay?: number;
 }
 
 const views = new Map<string, { center: L.LatLng; zoom: number }>();
@@ -103,6 +110,9 @@ export default function RouteMap(props: Props) {
       worldCopyJump: false,
     });
     if (!plan) map.attributionControl.setPrefix(false);
+    const pane = map.createPane('planOverlay');
+    pane.style.zIndex = '350';
+    pane.style.pointerEvents = 'none';
     tilesRef.current = L.layerGroup().addTo(map);
     vecRef.current = L.layerGroup().addTo(map);
     gpsRef.current = L.layerGroup().addTo(map);
@@ -183,6 +193,131 @@ export default function RouteMap(props: Props) {
     jumped.current = true;
     if (!views.has(`${props.viewKey ?? props.insp.id}:map`) && !contentPositions(props.insp, null).length) m.setView([props.gpsFix.lat, props.gpsFix.lng], 17);
   }, [props.gpsFix, props.insp]);
+
+  // ------------------------------------------------ Plan als Ebene über der Karte
+  const ovUrl = usePlanUrl(props.overlay?.id);
+  const ovImg = useRef<HTMLImageElement | null>(null);
+  const ovGeo = useRef<PlanGeoref | null>(null);
+  const handlesRef = useRef<L.LayerGroup | null>(null);
+
+  /** Bild per CSS-Matrix auf die drei Eckpunkte legen (Drehung/Skalierung) */
+  const placeOverlay = () => {
+    const map = mapRef.current;
+    const img = ovImg.current;
+    const ov = propsRef.current.overlay;
+    const g = ovGeo.current;
+    if (!map || !img || !ov || !g) { if (img) img.style.display = 'none'; return; }
+    const tl = map.latLngToLayerPoint([g.tl.lat, g.tl.lng]);
+    const tr = map.latLngToLayerPoint([g.tr.lat, g.tr.lng]);
+    const bl = map.latLngToLayerPoint([g.bl.lat, g.bl.lng]);
+    const a = (tr.x - tl.x) / ov.width, b = (tr.y - tl.y) / ov.width;
+    const c = (bl.x - tl.x) / ov.height, d = (bl.y - tl.y) / ov.height;
+    img.style.display = 'block';
+    img.style.width = `${ov.width}px`;
+    img.style.height = `${ov.height}px`;
+    img.style.transform = `matrix(${a}, ${b}, ${c}, ${d}, ${tl.x}, ${tl.y})`;
+    img.style.opacity = String(ov.opacity);
+  };
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !props.overlay || !ovUrl || props.plan) return;
+    const img = document.createElement('img');
+    img.src = ovUrl;
+    img.alt = '';
+    img.draggable = false;
+    img.className = 'plan-overlay';
+    map.getPane('planOverlay')!.appendChild(img);
+    ovImg.current = img;
+    placeOverlay();
+    const hide = () => { img.style.visibility = 'hidden'; };
+    const show = () => { placeOverlay(); img.style.visibility = 'visible'; };
+    map.on('zoomstart', hide);
+    map.on('zoomend viewreset resize', show);
+    return () => {
+      map.off('zoomstart', hide);
+      map.off('zoomend viewreset resize', show);
+      img.remove();
+      ovImg.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.overlay?.id, ovUrl, props.plan]);
+
+  // Einpassung/Deckkraft aus den Daten übernehmen; erste Einpassung aus dem Kartenausschnitt
+  useEffect(() => {
+    const map = mapRef.current;
+    const ov = props.overlay;
+    if (!map || !ov) { ovGeo.current = null; placeOverlay(); return; }
+    if (!ov.georef && props.adjustOverlay) {
+      const b = map.getBounds();
+      const mc = map.getCenter();
+      // Startort: GPS-Position (falls vorhanden), sonst Kartenmitte
+      const gps = propsRef.current.gpsFix;
+      const c = gps ? { lat: gps.lat, lng: gps.lng } : { lat: mc.lat, lng: mc.lng };
+      const widthM = Math.min(map.distance([mc.lat, b.getWest()], [mc.lat, b.getEast()]), 1500);
+      const g = initialGeoref({ ...ov, name: '', fileName: '', ptPerPx: null, scaleNote: '', createdAt: 0 }, c, widthM);
+      ovGeo.current = g;
+      propsRef.current.onOverlayChange?.(g);
+      // auf den Plan zoomen, damit die Griffe gut greifbar sind
+      const br = georefBR(g);
+      map.fitBounds(L.latLngBounds([[g.tl.lat, g.tl.lng], [g.tr.lat, g.tr.lng], [g.bl.lat, g.bl.lng], [br.lat, br.lng]]), { padding: [50, 50], animate: false });
+    } else {
+      ovGeo.current = ov.georef;
+    }
+    placeOverlay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.overlay?.georef, props.overlay?.opacity, props.overlay?.id, props.adjustOverlay, ovUrl]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !props.recenterOverlay || !ovGeo.current) return;
+    const c = map.getCenter();
+    const g = recenterGeoref(ovGeo.current, { lat: c.lat, lng: c.lng });
+    ovGeo.current = g;
+    placeOverlay();
+    propsRef.current.onOverlayChange?.(g);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.recenterOverlay]);
+
+  // Griffe: Mitte = verschieben, Ecke unten rechts = drehen + größer/kleiner
+  useEffect(() => {
+    const map = mapRef.current;
+    handlesRef.current?.remove();
+    handlesRef.current = null;
+    const g0 = props.overlay?.georef;
+    if (!map || !props.adjustOverlay || !g0) return;
+    const grp = L.layerGroup().addTo(map);
+    handlesRef.current = grp;
+    const c = georefCenter(g0);
+    const br = georefBR(g0);
+    const icon = (cls: string, html: string) => L.divIcon({ className: '', html: `<div class="ov-handle ${cls}">${html}</div>`, iconSize: [46, 46], iconAnchor: [23, 23] });
+    const move = L.marker([c.lat, c.lng], { draggable: true, icon: icon('move', '✥'), zIndexOffset: 2000, keyboard: false }).addTo(grp);
+    const rot = L.marker([br.lat, br.lng], { draggable: true, icon: icon('rot', '⟳'), zIndexOffset: 2000, keyboard: false }).addTo(grp);
+    let start: PlanGeoref = g0;
+    let startPos = move.getLatLng();
+    move.on('dragstart', () => { start = ovGeo.current ?? g0; startPos = move.getLatLng(); });
+    move.on('drag', () => {
+      const p = move.getLatLng();
+      const dLat = p.lat - startPos.lat, dLng = p.lng - startPos.lng;
+      const mv = (q: LatLng) => ({ lat: q.lat + dLat, lng: q.lng + dLng });
+      ovGeo.current = { tl: mv(start.tl), tr: mv(start.tr), bl: mv(start.bl) };
+      const b2 = georefBR(ovGeo.current);
+      rot.setLatLng([b2.lat, b2.lng]);
+      placeOverlay();
+    });
+    let rotFrom = rot.getLatLng();
+    rot.on('dragstart', () => { start = ovGeo.current ?? g0; rotFrom = rot.getLatLng(); });
+    rot.on('drag', () => {
+      const p = rot.getLatLng();
+      ovGeo.current = dragHandleGeoref(start, { lat: rotFrom.lat, lng: rotFrom.lng }, { lat: p.lat, lng: p.lng });
+      placeOverlay();
+    });
+    const commit = () => { if (ovGeo.current) propsRef.current.onOverlayChange?.(ovGeo.current); };
+    move.on('dragend', commit);
+    rot.on('dragend', commit);
+    return () => { grp.remove(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.adjustOverlay, props.overlay?.georef]);
 
   // ------------------------------------------------ GPS-Punkt
   useEffect(() => {

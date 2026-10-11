@@ -56,6 +56,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {import.meta.env.VITE_PREVIEW_BANNER && <div className="preview-banner">VORSCHAU – noch nicht veröffentlicht</div>}
       {screen}
       <DialogHost />
       <Toasts />

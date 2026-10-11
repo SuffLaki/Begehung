@@ -72,6 +72,16 @@ export interface InspectionMeta {
   description: string;
   startPoint: string;
   remarks: string;
+  /** Teilnehmer der Begehung */
+  participants?: Participant[];
+}
+
+export interface Participant {
+  id: ID;
+  name: string;
+  company: string;
+  phone: string;
+  email: string;
 }
 
 export type PointKind = 'route' | 'marker';
@@ -282,6 +292,24 @@ export interface PlanSheet {
   metersPerPx: number | null;
   scaleNote: string;
   createdAt: number;
+  /**
+   * Einpassung auf die Landkarte (vom Benutzer ausgerichtet): Lage der Ecken
+   * oben links, oben rechts, unten links. null = nicht eingepasst.
+   */
+  georef?: PlanGeoref | null;
+}
+
+export interface PlanGeoref {
+  tl: LatLng;
+  tr: LatLng;
+  bl: LatLng;
+}
+
+/** Plan als halbtransparente Ebene über der Landkarte */
+export interface PlanOverlay {
+  planId: ID;
+  opacity: number;
+  visible: boolean;
 }
 
 /** Kartengrundlage der Begehung: Landkarte oder ein Plan */
@@ -310,6 +338,8 @@ export interface Inspection {
   plans?: PlanSheet[];
   /** aktuelle Kartengrundlage (Standard: Landkarte) */
   basemap?: Basemap;
+  /** eingepasster Plan als Ebene über der Landkarte */
+  overlay?: PlanOverlay | null;
   /** Segment, an das neue Punkte angehängt werden */
   activeSegmentId: ID | null;
   counters: { point: number; photo: number };
@@ -409,6 +439,8 @@ export interface Settings {
   user: User;
   mail: MailDefaults;
   defaultMapType: MapType;
+  /** bekannte Teilnehmer aus früheren Begehungen (Vorschläge) */
+  contacts?: Participant[];
   lineTypes: LineType[];
   /** Adresssuche über OpenStreetMap (Straßen, Hausnummern, Kreuzungen) */
   placeSearch: boolean;

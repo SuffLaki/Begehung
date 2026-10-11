@@ -77,3 +77,22 @@ export function mailtoUrl(m: MailDefaults): string {
 export function copyText(text: string): void {
   void navigator.clipboard?.writeText(text).catch(() => undefined);
 }
+
+export function isAppleTouch(): boolean {
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * PDF auf dem Gerät speichern. Am PC/Android: Download in den Download-Ordner.
+ * iPhone/iPad: Web-Apps dürfen nicht direkt ins Dateisystem schreiben – dort
+ * öffnet sich das Teilen-Menü, in dem „In Dateien sichern“ die PDF ablegt.
+ */
+export async function saveLocally(blob: Blob, fileName: string): Promise<'downloaded' | 'shared' | 'cancelled'> {
+  if (isAppleTouch()) {
+    const r = await shareFile(blob, fileName, { title: fileName });
+    return r;
+  }
+  download(blob, fileName);
+  return 'downloaded';
+}

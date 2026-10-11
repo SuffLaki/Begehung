@@ -79,6 +79,7 @@ export default function FinishCheck({ id }: { id: string }) {
             <b>Begehung abgeschlossen</b>
             <div>Status: Abgeschlossen. Jetzt das Protokoll erstellen.</div>
             <button className="btn primary big block" onClick={() => navigate(`${base}/pdf`, true)}><FileText size={20} />Begehungsprotokoll erstellen</button>
+            <div className="small muted">In der Vorschau dann „Lokal speichern“, „Teilen“ oder „Per E-Mail“.</div>
             <button className="btn block" onClick={() => navigate(base, true)}>Zur Begehung</button>
           </div>
         ) : (

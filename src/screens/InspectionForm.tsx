@@ -13,6 +13,7 @@ import { currentFix, gpsSupported } from '../geo/gps';
 import { addRoutePoint } from '../geo/routeOps';
 import { canEditInspection } from '../model/permissions';
 import { useUi } from './inspection/actions';
+import ParticipantsEditor, { mergeContacts } from './ParticipantsEditor';
 
 export default function InspectionForm({ editId }: { editId?: string }) {
   const settings = useApp((s) => s.settings);
@@ -30,12 +31,13 @@ export default function InspectionForm({ editId }: { editId?: string }) {
     void useInspection.getState().load(editId).then((ok) => {
       if (!ok) { toast('Begehung nicht gefunden.', 'error'); navigate('/list', true); return; }
       setMeta({ ...useInspection.getState().insp!.meta });
+      if (window.location.hash.includes('teilnehmer')) window.setTimeout(() => document.getElementById('teilnehmer')?.scrollIntoView({ block: 'start' }), 100);
     });
   }, [editId]);
 
   if (!meta) return <div className="screen"><Nav title="Projektdaten" /><Loading /></div>;
   const readOnly = !!editId && !canEditInspection(settings.user, insp);
-  const set = (k: keyof InspectionMeta) => (v: string) => setMeta((m) => {
+  const set = (k: Exclude<keyof InspectionMeta, 'participants'>) => (v: string) => setMeta((m) => {
     const next = { ...m!, [k]: v };
     if (k === 'projectName' && !editId) {
       const p = projects.find((x) => x.name === v);
@@ -63,7 +65,8 @@ export default function InspectionForm({ editId }: { editId?: string }) {
     if (hasErrors) { toast('Bitte die markierten Pflichtfelder ausfüllen.', 'error'); return; }
     setBusy(true);
     try {
-      const m = { ...meta! };
+      const m = { ...meta!, participants: (meta!.participants ?? []).filter((p) => p.name.trim() || p.company.trim() || p.email.trim() || p.phone.trim()) };
+      if (m.participants.length) void useApp.getState().updateSettings((s) => { s.contacts = mergeContacts(s.contacts ?? [], m.participants); });
       if (!m.inspectionNumber.trim()) {
         const same = (await listInspections()).filter((r) => r.projectName === m.projectName && r.projectNumber === m.projectNumber).length;
         m.inspectionNumber = `${m.date.replace(/-/g, '')}-${same + 1}`;
@@ -129,6 +132,9 @@ export default function InspectionForm({ editId }: { editId?: string }) {
           <Field label="Baustelle / Bereich" value={meta.site} onChange={set('site')} readOnly={readOnly} />
           <Field label="Startpunkt (Beschreibung)" value={meta.startPoint} onChange={set('startPoint')} placeholder="z. B. UW Ulm-Nord, Tor 2" readOnly={readOnly} />
         </div>
+
+        <div className="group-title" id="teilnehmer">Teilnehmer ({(meta.participants ?? []).length})</div>
+        <ParticipantsEditor value={meta.participants ?? []} readOnly={readOnly} onChange={(v) => setMeta((m) => ({ ...m!, participants: v }))} />
         {!editId && (
           <>
             <div className="list" style={{ marginTop: 12 }}>

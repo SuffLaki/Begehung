@@ -29,6 +29,8 @@ interface UiState {
   basemapOpen: boolean;
   /** Werkzeug, das der Karten-Tab beim Öffnen aktivieren soll */
   mapTool: MapTool | null;
+  /** Plan, der gerade auf der Landkarte eingepasst wird */
+  adjustPlanId: string | null;
   set(p: Partial<UiState>): void;
 }
 
@@ -43,11 +45,12 @@ export const useUi = create<UiState>((set) => ({
   recorderOpen: false,
   basemapOpen: false,
   mapTool: null,
+  adjustPlanId: null,
   set: (p) => set(p),
 }));
 
 export function resetUi() {
-  useUi.setState({ pointId: null, photoId: null, annotateId: null, noteId: null, notePrefill: null, voice: null, segmentsOpen: false, recorderOpen: false, basemapOpen: false, mapTool: null });
+  useUi.setState({ pointId: null, photoId: null, annotateId: null, noteId: null, notePrefill: null, voice: null, segmentsOpen: false, recorderOpen: false, basemapOpen: false, mapTool: null, adjustPlanId: null });
 }
 
 /** 📍 Aktuelle GPS-Position als nächsten Trassenpunkt setzen */

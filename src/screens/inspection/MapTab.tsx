@@ -11,7 +11,10 @@ import { useApp, toast } from '../../state/appStore';
 import { useGps, useRecorder, pauseRecording, resumeRecording, stopRecording, startGps } from '../../geo/gps';
 import { addMarker, addRoutePoint, insertPointOnLine, movePoint, renumber } from '../../geo/routeOps';
 import { formatDistance, hasUnscaledLength, pathLength, planDistance, routeLength } from '../../geo/geo';
-import { activePlan } from '../../plans/plans';
+import { activePlan, convertPlanPointsToMap, georefRotation, metersPerPxFromGeoref, moveGeoref, overlayPlan, rotateScaleGeoref } from '../../plans/plans';
+import { confirmDialog } from '../../state/appStore';
+import type { PlanGeoref } from '../../model/types';
+import { Eye, EyeOff, Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { FileImage } from 'lucide-react';
 import { pointDisplayName } from '../../model/factory';
 import type { LatLng, MapType } from '../../model/types';
@@ -40,6 +43,40 @@ export default function MapTab() {
   const [measure, setMeasure] = useState<LatLng[]>([]);
   const [measureM, setMeasureM] = useState('');
   const plan = activePlan(insp);
+  const [step, setStep] = useState<'fein' | 'grob'>('fein');
+  const [recenter, setRecenter] = useState(0);
+  const [fine, setFine] = useState(false);
+  // Plan als Ebene: wird gerade eingepasst oder liegt eingepasst über der Karte
+  const adjustPlan = !plan && ui.adjustPlanId ? insp.plans?.find((p) => p.id === ui.adjustPlanId) ?? null : null;
+  const ovPlan = adjustPlan ?? overlayPlan(insp);
+  const ovOpacity = insp.overlay?.planId === ovPlan?.id ? insp.overlay?.opacity ?? 0.6 : 0.6;
+
+  function setGeoref(g: PlanGeoref, undoable = true) {
+    if (!ovPlan) return;
+    mutate((d) => { const p = d.plans?.find((x) => x.id === ovPlan.id); if (p) p.georef = g; }, { undoable });
+  }
+  function setOpacity(v: number) {
+    if (!ovPlan) return;
+    mutate((d) => { d.overlay = { planId: ovPlan.id, opacity: v, visible: true }; }, { undoable: false });
+  }
+  async function finishAdjust() {
+    const p = adjustPlan;
+    useUi.getState().set({ adjustPlanId: null });
+    if (!p?.georef) return;
+    const onPlan = insp.route.points.filter((x) => x.planId === p.id).length;
+    const convert = onPlan > 0 && await confirmDialog({
+      title: `${onPlan} Punkte vom Plan übernehmen?`,
+      message: 'Die direkt auf dem Plan gesetzten Punkte werden mit der Einpassung auf die Karte übertragen. Danach sind GPS, Adresssuche und Längen für sie verfügbar.',
+      confirmLabel: 'Übernehmen', cancelLabel: 'Auf dem Plan lassen',
+    });
+    mutate((d) => {
+      d.overlay = { planId: p.id, opacity: d.overlay?.planId === p.id ? d.overlay.opacity : 0.6, visible: true };
+      const x = d.plans?.find((q) => q.id === p.id);
+      if (x && x.georef && !x.metersPerPx) { x.metersPerPx = metersPerPxFromGeoref(x.georef, x); x.scaleNote = 'aus Einpassung auf der Karte'; }
+      if (convert) convertPlanPointsToMap(d, p.id);
+    });
+    toast(`Plan „${p.name}“ liegt jetzt eingepasst über der Karte.`, 'success');
+  }
 
   // Werkzeug aus anderer Ansicht übernehmen (z. B. „Standort“ auf einem Plan → Punkt antippen)
   useEffect(() => {
@@ -118,6 +155,10 @@ export default function MapTab() {
         key={plan?.id ?? 'map'}
         plan={plan ? { id: plan.id, width: plan.width, height: plan.height } : null}
         extraLine={tool === 'measure' ? measure : undefined}
+        overlay={ovPlan ? { id: ovPlan.id, width: ovPlan.width, height: ovPlan.height, metersPerPx: ovPlan.metersPerPx, georef: ovPlan.georef ?? null, opacity: ovOpacity } : null}
+        adjustOverlay={!!adjustPlan}
+        recenterOverlay={recenter}
+        onOverlayChange={(g) => setGeoref(g)}
         insp={insp}
         mapType={mapType}
         editMode={editMode && canEdit}
@@ -156,7 +197,16 @@ export default function MapTab() {
           {!plan && <button aria-label="Auf meinen Standort" onClick={() => { if (gpsFix) setCenterOn({ pos: gpsFix, n: Date.now() }); else void startGps(); }}><LocateFixed size={22} /></button>}
           <button aria-label="Trasse einpassen" onClick={() => setFitSignal((n) => n + 1)}><Maximize size={20} /></button>
         </div>
-        {canEdit && (
+        {!plan && !adjustPlan && insp.overlay && insp.plans?.some((p) => p.id === insp.overlay!.planId && p.georef) && (
+          <div className="glass map-ctl">
+            <button aria-label={insp.overlay.visible ? 'Planebene ausblenden' : 'Planebene einblenden'} className={insp.overlay.visible ? 'on' : ''}
+              onClick={() => mutate((d) => { if (d.overlay) d.overlay.visible = !d.overlay.visible; }, { undoable: false })}>
+              {insp.overlay.visible ? <Eye size={20} /> : <EyeOff size={20} />}
+            </button>
+            {canEdit && <button aria-label="Plan anpassen" onClick={() => useUi.getState().set({ adjustPlanId: insp.overlay!.planId })}><Move size={20} /></button>}
+          </div>
+        )}
+        {canEdit && !adjustPlan && (
           <div className="glass map-ctl">
             <button className={editMode ? 'on' : ''} aria-label={editMode ? 'Bearbeiten beenden' : 'Trasse bearbeiten'} onClick={() => { setEditMode(!editMode); setTool('none'); setPlaceId(null); }}>
               {editMode ? <Check size={22} /> : <Pencil size={20} />}
@@ -184,7 +234,47 @@ export default function MapTab() {
           </div>
         )}
 
-        {editMode && canEdit ? (
+        {adjustPlan ? (
+          <div className="glass ov-bar">
+            <div className="small"><b>Einpassen:</b> <span style={{ color: '#0a84ff', fontWeight: 700 }}>blau</span> = verschieben, <span style={{ color: '#ff9f0a', fontWeight: 700 }}>orange</span> = drehen/Größe.{adjustPlan.georef ? ` Drehung ${georefRotation(adjustPlan.georef)}°` : ''}</div>
+            <div className="ov-row">
+              <span className="small" style={{ width: 70 }}>Deckkraft</span>
+              <input type="range" min={0.15} max={1} step={0.05} value={ovOpacity} aria-label="Deckkraft" onChange={(e) => setOpacity(parseFloat(e.target.value))} />
+              <span className="small" style={{ width: 40, textAlign: 'right' }}>{Math.round(ovOpacity * 100)} %</span>
+            </div>
+            {fine && adjustPlan.georef && (() => {
+              const g = adjustPlan.georef!;
+              const m = step === 'fein' ? 0.5 : 5;
+              const deg = step === 'fein' ? 0.5 : 5;
+              const f = step === 'fein' ? 1.005 : 1.05;
+              return (
+                <>
+                  <div className="ov-row">
+                    <button className="btn" aria-label="nach Westen" onClick={() => setGeoref(moveGeoref(g, -m, 0))}><ArrowLeft size={18} /></button>
+                    <button className="btn" aria-label="nach Norden" onClick={() => setGeoref(moveGeoref(g, 0, m))}><ArrowUp size={18} /></button>
+                    <button className="btn" aria-label="nach Süden" onClick={() => setGeoref(moveGeoref(g, 0, -m))}><ArrowDown size={18} /></button>
+                    <button className="btn" aria-label="nach Osten" onClick={() => setGeoref(moveGeoref(g, m, 0))}><ArrowRight size={18} /></button>
+                  </div>
+                  <div className="ov-row">
+                    <button className="btn" aria-label="links drehen" onClick={() => setGeoref(rotateScaleGeoref(g, -deg, 1))}><RotateCcw size={18} /></button>
+                    <button className="btn" aria-label="rechts drehen" onClick={() => setGeoref(rotateScaleGeoref(g, deg, 1))}><RotateCw size={18} /></button>
+                    <button className="btn" aria-label="kleiner" onClick={() => setGeoref(rotateScaleGeoref(g, 0, 1 / f))}><ZoomOut size={18} /></button>
+                    <button className="btn" aria-label="größer" onClick={() => setGeoref(rotateScaleGeoref(g, 0, f))}><ZoomIn size={18} /></button>
+                  </div>
+                </>
+              );
+            })()}
+            <div className="ov-row">
+              <button className="btn" onClick={() => setRecenter((n) => n + 1)}><Crosshair size={16} />Plan in Kartenmitte</button>
+              {gpsFix && <button className="btn" onClick={() => setCenterOn({ pos: gpsFix, n: Date.now() })}><LocateFixed size={16} />Mein Standort</button>}
+            </div>
+            {fine && <Seg<'fein' | 'grob'> value={step} onChange={setStep} options={[{ value: 'fein', label: 'Schritt fein (0,5 m / 0,5°)' }, { value: 'grob', label: 'grob (5 m / 5°)' }]} />}
+            <div className="ov-row">
+              <button className="btn" onClick={() => setFine(!fine)}>{fine ? 'Feinjustierung ▴' : 'Feinjustierung ▾'}</button>
+              <button className="btn primary" style={{ flex: '0 0 100px' }} onClick={() => void finishAdjust()}><Check size={18} />Fertig</button>
+            </div>
+          </div>
+        ) : editMode && canEdit ? (
           <>
             <div className="glass map-hint small">
               <span className="grow">{hint}</span>
@@ -230,6 +320,18 @@ export default function MapTab() {
             <div className="row-icon" style={{ background: '#5e5ce6' }}><FileImage size={16} /></div>
             <div className="row-main"><div className="row-title">Grundlage: {plan ? plan.name : 'Landkarte'}</div><div className="row-sub">Plan einfügen oder wechseln</div></div>
           </button>
+          {!plan && insp.overlay && insp.plans?.some((p) => p.id === insp.overlay!.planId && p.georef) && (
+            <div className="card stack">
+              <div className="hstack"><b className="grow">Planebene: {insp.plans!.find((p) => p.id === insp.overlay!.planId)!.name}</b>
+                <SwitchRowInline checked={insp.overlay.visible} onChange={(v) => mutate((d) => { if (d.overlay) d.overlay.visible = v; }, { undoable: false })} /></div>
+              <div className="ov-row hstack">
+                <span className="small">Deckkraft</span>
+                <input type="range" style={{ flex: 1 }} min={0.15} max={1} step={0.05} value={insp.overlay.opacity} aria-label="Deckkraft der Planebene" onChange={(e) => mutate((d) => { if (d.overlay) d.overlay.opacity = parseFloat(e.target.value); }, { undoable: false })} />
+                <span className="small">{Math.round(insp.overlay.opacity * 100)} %</span>
+              </div>
+              {canEdit && <button className="btn sm" onClick={() => { setLayersOpen(false); useUi.getState().set({ adjustPlanId: insp.overlay!.planId }); }}><Move size={16} />Einpassung anpassen</button>}
+            </div>
+          )}
           {!plan && <Seg<MapType> value={mapType} onChange={setMapType} options={(Object.keys(MAP_TYPES) as MapType[]).map((k) => ({ value: k, label: MAP_TYPES[k].label }))} />}
           <div className="list">
             <SwitchRow title="Fotos anzeigen" checked={showPhotos} onChange={setShowPhotos} />
@@ -247,3 +349,12 @@ export default function MapTab() {
   );
 }
 
+
+function SwitchRowInline({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="switch">
+      <input type="checkbox" role="switch" aria-label="Planebene anzeigen" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span />
+    </label>
+  );
+}

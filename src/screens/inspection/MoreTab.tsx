@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileImage, FileText, Flag, PenTool, ClipboardEdit, ListChecks, Sparkles, Share2, Trash2, Download, Plus, Check, Archive, Mail } from 'lucide-react';
+import { Users, FileImage, FileText, Flag, PenTool, ClipboardEdit, ListChecks, Sparkles, Share2, Trash2, Download, Plus, Check, Archive, Mail } from 'lucide-react';
 import { useInspection } from '../../state/inspectionStore';
 import { useApp, confirmDialog, toast, errorText } from '../../state/appStore';
 import { navigate } from '../../router';
@@ -10,7 +10,7 @@ import { newTask } from '../../model/factory';
 import { aiConfigured, getAi } from '../../ai/ai';
 import { deleteInspection, deleteReport, listReports } from '../../storage/db';
 import { exportInspection } from '../../storage/backup';
-import { shareFile } from '../../share/share';
+import { saveLocally, shareFile } from '../../share/share';
 import type { Report } from '../../model/types';
 import { useCanEdit, UndoRedo } from './parts';
 import { pointDisplayName } from '../../model/factory';
@@ -37,6 +37,7 @@ export default function MoreTab() {
         <div className="group-title">Begehung</div>
         <div className="list">
           <Row icon={<FileImage size={16} />} iconBg="#5e5ce6" title="Pläne / Kartengrundlage" value={insp.basemap?.kind === 'plan' ? (insp.plans?.find((p) => insp.basemap?.kind === 'plan' && p.id === insp.basemap.planId)?.name ?? 'Plan') : 'Landkarte'} onClick={() => useUi.getState().set({ basemapOpen: true })} />
+          <Row icon={<Users size={16} />} iconBg="#34c759" title="Teilnehmer" value={String((insp.meta.participants ?? []).length)} sub={(insp.meta.participants ?? []).map((p) => p.name).filter(Boolean).join(', ') || 'Name, Betrieb, Telefon, E-Mail'} onClick={() => navigate(`/i/${insp.id}/meta?teilnehmer`)} />
           <Row icon={<ClipboardEdit size={16} />} iconBg="#0a84ff" title="Projektdaten" sub={[insp.meta.projectNumber, insp.meta.client].filter(Boolean).join(' · ') || 'Projekt, Datum, Begeher …'} onClick={() => navigate(`/i/${insp.id}/meta`)} />
           <Row icon={<ListChecks size={16} />} iconBg="#34c759" title="Aufgaben" value={insp.tasks.length ? `${openTasks} offen` : ''} onClick={() => setSheet('tasks')} />
           <Row icon={<Sparkles size={16} />} iconBg="#bf5af2" title="Zusammenfassung" value={insp.summary ? (insp.summary.confirmed ? 'bestätigt' : 'zu prüfen') : ''} onClick={() => setSheet('summary')} />
@@ -59,6 +60,7 @@ export default function MoreTab() {
                     <div className="row-title ellipsis">{r.fileName}</div>
                     <div className="row-sub">{fmtDateTime(r.createdAt)} · {r.pageCount} Seiten · {(r.pdf.size / 1024 / 1024).toFixed(1)} MB</div>
                   </div>
+                  <button className="icon-btn" aria-label="Lokal speichern" onClick={() => { saveLocally(r.pdf, r.fileName).then((x) => x === 'downloaded' && toast('Im Download-Ordner gespeichert.', 'success')).catch((e) => toast(errorText(e), 'error')); }}><Download size={20} /></button>
                   <button className="icon-btn" aria-label="Teilen" onClick={() => { shareFile(r.pdf, r.fileName, { title: r.fileName }).catch((e) => toast(errorText(e), 'error')); }}><Share2 size={20} /></button>
                   <button className="icon-btn" aria-label="Per E-Mail" onClick={() => setMailReport(r)}><Mail size={20} /></button>
                   <button className="icon-btn" aria-label="Löschen" style={{ color: 'var(--danger)' }} onClick={async () => {

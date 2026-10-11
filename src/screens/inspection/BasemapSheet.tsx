@@ -13,6 +13,7 @@ import { deletePlanBlob } from '../../storage/db';
 import { deletePoint } from '../../geo/routeOps';
 import { Banner, Sheet, Spinner } from '../../ui/kit';
 import { useUi } from './actions';
+import { currentFix, startGps } from '../../geo/gps';
 import { useCanEdit } from './parts';
 
 type Step = { kind: 'list' } | { kind: 'pages'; file: File; pages: RenderedPage[] } | { kind: 'name'; file: File; page: number; pageCount: number } | { kind: 'scale'; planId: string };
@@ -77,6 +78,24 @@ function BasemapInner() {
       toast(errorText(e), 'error');
     } finally {
       setBusy('');
+    }
+  }
+
+  /** Plan als Ebene über die Landkarte legen (ggf. zuerst einpassen) */
+  async function overlay(plan: PlanSheet) {
+    mutate((d) => {
+      d.basemap = { kind: 'map' };
+      d.overlay = { planId: plan.id, opacity: d.overlay?.planId === plan.id ? d.overlay.opacity : 0.6, visible: true };
+    }, { undoable: false });
+    close();
+    if (!plan.georef) {
+      // Standort abwarten, damit der Plan gleich am richtigen Ort liegt (ohne GPS: Kartenmitte)
+      if (await startGps()) {
+        toast('Standort wird ermittelt …');
+        await currentFix(30000, 8000).catch(() => null);
+      }
+      useUi.getState().set({ adjustPlanId: plan.id });
+      toast('Plan liegt über der Karte – jetzt ausrichten.', 'success');
     }
   }
 
@@ -174,21 +193,22 @@ function BasemapInner() {
             <div className="row-main"><div className="row-title">Landkarte</div><div className="row-sub">GPS, Adresssuche, Straßenkarte/Luftbild</div></div>
             {!activeId && <Check size={20} color="var(--accent)" />}
           </button>
-          {plans.map((p) => <PlanRow key={p.id} plan={p} active={p.id === activeId} canEdit={canEdit} onSelect={() => select(p.id)} onScale={() => { setRatio(p.scaleNote); setStep({ kind: 'scale', planId: p.id }); }} onRemove={() => void remove(p)}
+          {plans.map((p) => <PlanRow key={p.id} plan={p} active={p.id === activeId} overlayOn={!activeId && insp.overlay?.planId === p.id && insp.overlay.visible && !!p.georef} canEdit={canEdit} onSelect={() => select(p.id)} onOverlay={() => void overlay(p)} onScale={() => { setRatio(p.scaleNote); setStep({ kind: 'scale', planId: p.id }); }} onRemove={() => void remove(p)}
             onRename={(n) => mutate((d) => { const x = d.plans?.find((q) => q.id === p.id); if (x) x.name = n; })} />)}
         </div>
         {canEdit && (
           <button className="btn primary block" disabled={!!busy} onClick={() => void pick()}>{busy ? <><Spinner />{busy}</> : <><FileUp size={18} />Plan einfügen (PDF oder Bild)</>}</button>
         )}
         <div className="small muted">
-          Auf einem Plan setzt du Punkte, Linien, Fotos und Notizen direkt – die Landkarte wird dann nicht verwendet. Ein Plan hat keinen GPS-Bezug: GPS-Position, Adressen und Richtungsangaben werden darauf nicht automatisch eingezeichnet.
+          <b>Über Karte legen:</b> Der Plan liegt halbtransparent über der GPS-Karte (wie eine Hybrid-Ansicht). Einmal mit Verschieben/Drehen/Größe passend ausrichten – danach funktionieren GPS, Adresssuche und Längen wie auf der Karte.<br />
+          <b>Nur Plan:</b> nur der Plan ohne Karte; Punkte direkt auf dem Plan, ohne GPS-Bezug.
         </div>
       </div>
     </Sheet>
   );
 }
 
-function PlanRow({ plan, active, canEdit, onSelect, onScale, onRemove, onRename }: { plan: PlanSheet; active: boolean; canEdit: boolean; onSelect: () => void; onScale: () => void; onRemove: () => void; onRename: (n: string) => void }) {
+function PlanRow({ plan, active, overlayOn, canEdit, onSelect, onOverlay, onScale, onRemove, onRename }: { plan: PlanSheet; active: boolean; overlayOn: boolean; canEdit: boolean; onSelect: () => void; onOverlay: () => void; onScale: () => void; onRemove: () => void; onRename: (n: string) => void }) {
   const url = usePlanUrl(plan.id);
   return (
     <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -198,9 +218,10 @@ function PlanRow({ plan, active, canEdit, onSelect, onScale, onRemove, onRename 
       <div className="row-main">
         <input style={{ border: 0, background: 'transparent', fontSize: 17, outline: 0, width: '100%' }} defaultValue={plan.name} aria-label="Planname" readOnly={!canEdit}
           onBlur={(e) => e.target.value.trim() && e.target.value !== plan.name && onRename(e.target.value.trim())} />
-        <div className="row-sub">{plan.metersPerPx ? `Maßstab ${plan.scaleNote || 'gemessen'}` : 'ohne Maßstab'} · {plan.fileName}</div>
-        <div className="hstack" style={{ marginTop: 6 }}>
-          {!active && <button className="btn sm" onClick={onSelect}>Verwenden</button>}
+        <div className="row-sub">{plan.georef ? 'auf der Karte eingepasst · ' : ''}{plan.metersPerPx ? `Maßstab ${plan.scaleNote || 'gemessen'}` : 'ohne Maßstab'} · {plan.fileName}</div>
+        <div className="hstack" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+          <button className={`btn sm${overlayOn ? ' primary' : ''}`} onClick={onOverlay}>{overlayOn ? 'Über Karte ✓' : plan.georef ? 'Über Karte legen' : 'Über Karte legen & einpassen'}</button>
+          {!active && <button className="btn sm" onClick={onSelect}>Nur Plan</button>}
           {canEdit && <button className="btn sm" onClick={onScale}><Ruler size={14} />Maßstab</button>}
           {canEdit && <button className="btn sm danger" onClick={onRemove} aria-label="Plan entfernen"><Trash2 size={14} /></button>}
         </div>

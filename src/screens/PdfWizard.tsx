@@ -11,7 +11,7 @@ import { listTemplates } from '../storage/db';
 import { MAP_TYPES } from '../map/providers';
 import RouteMap from '../map/RouteMap';
 import { contentBounds, frameBounds } from '../map/staticMap';
-import { activePlan } from '../plans/plans';
+import { activePlan, overlayPlan } from '../plans/plans';
 import { MAP_ASPECT } from '../pdf/generator';
 import { TemplateThumb, createTemplateFromFile } from './Templates';
 import { pickFile } from '../camera/photo';
@@ -104,6 +104,7 @@ export default function PdfWizard({ id }: { id: string }) {
                     <RouteMap
                       key={`${mapKey}-${plan?.id ?? 'map'}`}
                       plan={plan ? { id: plan.id, width: plan.width, height: plan.height } : null}
+                      overlay={(() => { const o = overlayPlan(insp); return o ? { id: o.id, width: o.width, height: o.height, metersPerPx: o.metersPerPx, georef: o.georef ?? null, opacity: insp.overlay?.opacity ?? 0.6 } : null; })()}
                       viewKey={`pdf-${insp.id}-${mapKey}`}
                       insp={insp}
                       mapType={ps.mapType}

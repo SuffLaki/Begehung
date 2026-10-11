@@ -117,6 +117,23 @@ markiert. Fehlt Richtung oder Entfernung, wird **keine** Position erfunden – d
 * PDF: eine Übersichtsseite je Grundlage mit Inhalt (Landkarte und jeder benutzte Plan), Plan als Hintergrund
   (`renderPlanMap`), Maßstabsleiste nur mit Maßstab. Sicherungen enthalten die Planbilder.
 
+## Plan als Ebene über der Karte (Einpassung)
+
+* `PlanSheet.georef` = Kartenlage der Ecken oben links/oben rechts/unten links (lineare Abbildung, für Baustellenpläne genau genug).
+  `Inspection.overlay` = eingeblendeter Plan + Deckkraft.
+* Anzeige: Planbild per CSS-Matrix in eigener Leaflet-Ebene (`planOverlay`, unter Linien/Punkten). Einpassen mit Griffen
+  (verschieben, drehen/skalieren um die Mitte), Feinjustierung, „Plan in Kartenmitte“. Maßstab ergibt sich aus der Einpassung.
+* Bereits auf dem Plan gesetzte Punkte können per `convertPlanPointsToMap` auf die Karte übertragen werden.
+* PDF: die Planebene wird mit Deckkraft zwischen Kartenkacheln und Eintragungen gezeichnet.
+
+## Teilnehmer & lokales Speichern
+
+* `InspectionMeta.participants` (Name, Betrieb, Telefon, E-Mail), Vorschläge aus `Settings.contacts`; Tabelle auf dem PDF-Deckblatt;
+  im Mail-Dialog als Empfänger übernehmbar.
+* „Lokal speichern“: Download am PC; auf iPhone/iPad über das Teilen-Menü („In Dateien sichern“), weil Web-Apps dort
+  nicht direkt ins Dateisystem schreiben dürfen.
+* Lokale Vorschau: `scripts/preview.sh` (ohne Service Worker, Hinweisbalken, räumt alte Zwischenspeicher auf).
+
 ## Straßen, Hausnummern, Kreuzungen (Adresssuche)
 
 * `places/placeParser.ts` erkennt im Text Straßennamen (Endungen wie -straße, -weg, -gasse … sowie „Am …“, „Neue Straße“),

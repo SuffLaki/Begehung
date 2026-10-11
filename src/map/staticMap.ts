@@ -5,7 +5,7 @@
 // Trasse auf neutralem Raster gezeichnet und das im Ergebnis gemeldet.
 
 import type { Inspection, MapBounds, PdfSettings, PlanSheet } from '../model/types';
-import { planImage } from '../plans/plans';
+import { overlayPlan, planImage } from '../plans/plans';
 import { MAP_TYPES, attributionOf, tileUrl } from './providers';
 import { endpoints, isRelevantPoint } from '../geo/routeOps';
 import { boundsOf } from '../geo/geo';
@@ -134,6 +134,21 @@ export async function renderStaticMap(insp: Inspection, ps: PdfSettings, aspect:
     label(g, 'Kartenhintergrund nicht verfügbar (offline) – nur Trassengeometrie', 14 * S, 22 * S, S, '#5c6670');
   }
 
+  // eingepasster Plan als Ebene (halbtransparent) zwischen Karte und Eintragungen
+  const ovp = overlayPlan(insp);
+  if (ovp?.georef) {
+    const img = await planImage(ovp.id);
+    if (img) {
+      const [x0, y0] = toPx(ovp.georef.tl.lat, ovp.georef.tl.lng);
+      const [x1, y1] = toPx(ovp.georef.tr.lat, ovp.georef.tr.lng);
+      const [x2, y2] = toPx(ovp.georef.bl.lat, ovp.georef.bl.lng);
+      g.save();
+      g.globalAlpha = insp.overlay?.opacity ?? 0.6;
+      g.setTransform((x1 - x0) / ovp.width, (y1 - y0) / ovp.width, (x2 - x0) / ovp.height, (y2 - y0) / ovp.height, x0, y0);
+      g.drawImage(img, 0, 0, ovp.width, ovp.height);
+      g.restore();
+    }
+  }
   drawOverlay(g, insp, ps, toPx, S, null);
 
   // ---------------------------------------------- Maßstab, Nordpfeil, Quelle
@@ -160,7 +175,7 @@ export async function renderStaticMap(insp: Inspection, ps: PdfSettings, aspect:
   g.textAlign = 'center';
   g.fillText('N', nx, ny - 13 * S + 0 * S - 2 * S);
 
-  const attribution = tilesOk ? attributionOf(ps.mapType) : '';
+  const attribution = [tilesOk ? attributionOf(ps.mapType) : '', ovp?.georef ? `Planebene: ${ovp.fileName}` : ''].filter(Boolean).join(' · ');
   if (attribution) {
     g.font = `${9 * S}px Helvetica, Arial, sans-serif`;
     const tw = g.measureText(attribution).width;
