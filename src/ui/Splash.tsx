@@ -3,43 +3,52 @@
 import { useEffect, useState } from 'react';
 import { CloudOff, Check, Map as MapIcon, Save } from 'lucide-react';
 import { useApp } from '../state/appStore';
+import { getLogo, logoDataUrl } from '../brand/logos';
 
-/** Strommast als Linienzeichnung */
-export function MastIcon({ size = 72 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
-      <path d="M32 4 L24 60 M32 4 L40 60 M18 16 H46 M14 26 H50 M26.3 44 H37.7 M28 30 L36 44 M36 30 L28 44 M29.7 16 L35 26 M34.3 16 L29 26" />
-      <path d="M18 16 v4 M46 16 v4 M14 26 v4 M50 26 v4" />
-    </svg>
-  );
+/** Gewähltes App-Symbol als Bild */
+export function AppLogo({ size = 96, id }: { size?: number; id?: string }) {
+  const chosen = useApp((s) => s.settings.appLogo);
+  const l = getLogo(id ?? chosen);
+  return <img className="app-logo" src={logoDataUrl(l)} width={size} height={size} alt="" style={{ borderRadius: size * 0.225 }} />;
+}
+
+/** Startanimation erneut abspielen (z. B. nach Wechsel des App-Symbols) */
+export function replaySplash() {
+  window.dispatchEvent(new Event('trasso:splash'));
 }
 
 export default function Splash() {
   const design = useApp((s) => s.settings.design ?? 'trasse');
   const loaded = useApp((s) => s.settingsLoaded);
+  const logo = getLogo(useApp((s) => s.settings.appLogo));
   const [phase, setPhase] = useState<'show' | 'fade' | 'gone'>('show');
+  const [run, setRun] = useState(0);
+  const [forced, setForced] = useState(false);
+  useEffect(() => {
+    const again = () => { setForced(true); setRun((n) => n + 1); setPhase('show'); };
+    window.addEventListener('trasso:splash', again);
+    return () => window.removeEventListener('trasso:splash', again);
+  }, []);
   useEffect(() => {
     if (!loaded) return;
-    const t1 = window.setTimeout(() => setPhase('fade'), 900);
-    const t2 = window.setTimeout(() => setPhase('gone'), 1300);
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const t1 = window.setTimeout(() => setPhase('fade'), still ? 700 : 2000);
+    const t2 = window.setTimeout(() => { setPhase('gone'); setForced(false); }, still ? 1000 : 2400);
     return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
-  }, [loaded]);
-  if (phase === 'gone' || (loaded && design === 'klassisch')) return null;
+  }, [loaded, run]);
+  if (phase === 'gone' || (loaded && design === 'klassisch' && !forced)) return null;
   return (
-    <div className={`splash${phase === 'fade' ? ' hide' : ''}`} onClick={() => setPhase('gone')} role="presentation">
-      <svg className="scene" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-        <path d="M0 160 Q80 120 160 150 T320 140 T400 150 V220 H0Z" fill="rgba(0,0,0,0.18)" />
-        <path d="M0 185 Q100 160 200 182 T400 176 V220 H0Z" fill="rgba(0,0,0,0.28)" />
-        <g stroke="rgba(255,255,255,0.35)" strokeWidth="1.4" fill="none">
-          <path d="M60 175 L72 70 L84 175 M50 95 H94 M46 112 H98 M66 140 L78 110 M78 140 L66 110" />
-          <path d="M300 165 L310 85 L320 165 M292 102 H328 M289 116 H331" />
-          <path d="M50 95 Q180 130 292 102 M94 95 Q200 128 328 102 M46 112 Q180 150 289 116 M98 112 Q200 148 331 116" />
-        </g>
-      </svg>
-      <div className="logo"><MastIcon /></div>
-      <h1>Trassenbegehung</h1>
-      <p>Sicher. Effizient. Digital.</p>
-      <div className="ver">Version 1.3</div>
+    <div className={`splash${phase === 'fade' ? ' hide' : ''}`} onClick={() => { setPhase('gone'); setForced(false); }} role="presentation"
+      style={{ background: `radial-gradient(120% 70% at 50% 38%, ${logo.bg[0]}, ${logo.bg[1]})` }}>
+      {/* Inline-SVG, damit die Animations-Klassen greifen; Schlüssel startet die Animation neu */}
+      {loaded && (
+        <>
+          <div key={`${logo.id}-${run}`} className={`splash-logo lg-${logo.id}`} dangerouslySetInnerHTML={{ __html: logo.svg }} />
+          <h1 key={`t-${run}`}>Trasso</h1>
+          <p key={`p-${run}`}>Trassen &amp; Baustellen – digital dokumentiert.</p>
+        </>
+      )}
+      <div className="ver">Version 1.4</div>
     </div>
   );
 }

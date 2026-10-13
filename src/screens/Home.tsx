@@ -19,6 +19,7 @@ import { formatDate } from '../pdf/generator';
 import { PRIORITY } from './inspection/NotesTab';
 import { StartCards } from '../ui/StartChooser';
 import Donut from '../ui/Donut';
+import { AppLogo } from '../ui/Splash';
 import DefectCard from './DefectCard';
 import { fixIfAvailable } from '../geo/gps';
 import { reverseGeocode } from '../places/osm';
@@ -97,7 +98,7 @@ export default function Home() {
       <div className="scroll with-tabs" style={{ padding: 0 }}>
         <div className="home-hero">
           <div className="hero-top">
-            <span className="hero-place">{place ? <><MapPin size={15} />{place}</> : (company || 'Trassenbegehung')}</span>
+            <span className="hero-place"><AppLogo size={30} /><b>Trasso</b>{place ? <><span style={{ opacity: 0.5 }}>·</span><MapPin size={15} />{place}</> : company ? <><span style={{ opacity: 0.5 }}>·</span>{company}</> : null}</span>
             <SyncPill />
           </div>
           <h1>Hallo{firstName ? ` ${firstName}` : ''}</h1>

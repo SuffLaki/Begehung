@@ -12,7 +12,7 @@ export function buildGpx(insp: Inspection): { xml: string; fileName: string; emp
   const byId = new Map(insp.route.points.map((p) => [p.id, p]));
   const lines: string[] = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-  lines.push('<gpx version="1.1" creator="Begehungsprotokoll" xmlns="http://www.topografix.com/GPX/1/1">');
+  lines.push('<gpx version="1.1" creator="Trasso" xmlns="http://www.topografix.com/GPX/1/1">');
   lines.push(`  <metadata><name>${esc(insp.meta.projectName || 'Begehung')}</name><time>${iso(insp.updatedAt)}</time></metadata>`);
   let count = 0;
   // Wegpunkte: benannte Trassenpunkte und Markierungen

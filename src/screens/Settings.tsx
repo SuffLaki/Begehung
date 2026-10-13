@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Building2, ImagePlus, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, User as UserIcon, X } from 'lucide-react';
+import { Building2, ImagePlus, Plus, Play, RotateCcw, ShieldCheck, Sparkles, Trash2, User as UserIcon, X } from 'lucide-react';
 import { useApp, toast, errorText, confirmDialog } from '../state/appStore';
+import { LOGOS, getLogo, logoDataUrl } from '../brand/logos';
+import { replaySplash } from '../ui/Splash';
 import { Banner, Field, Nav, Seg, SelectField, SwitchRow, Spinner } from '../ui/kit';
 import type { MapType, Role, Settings } from '../model/types';
 import { DEFAULT_CATEGORIES, DEFAULT_LINE_TYPES, uid } from '../model/factory';
@@ -99,6 +101,26 @@ export default function SettingsScreen() {
             </button>
           ))}
         </div>
+        <div className="group-title">App-Symbol</div>
+        {(['breitband', 'allgemein'] as const).map((g) => (
+          <div key={g}>
+            <div className="small muted" style={{ margin: '2px 4px 6px' }}>{g === 'breitband' ? 'Breitband / Glasfaser' : 'Allgemein'}</div>
+            <div className="logo-choice">
+              {LOGOS.filter((l) => l.group === g).map((l) => {
+                const on = getLogo(s.appLogo).id === l.id;
+                return (
+                  <button key={l.id} className={on ? 'on' : ''} aria-pressed={on} aria-label={`App-Symbol ${l.name}`} onClick={() => { commit((x) => { x.appLogo = l.id; }); window.setTimeout(replaySplash, 150); }}>
+                    <img src={logoDataUrl(l)} alt="" />
+                    <span>{l.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <button className="btn sm block" style={{ marginBottom: 6 }} onClick={() => replaySplash()}><Play size={16} />Startanimation ansehen</button>
+        <div className="group-foot">Gilt sofort für Startbildschirm und Übersicht. Das Symbol auf dem iPhone-Home-Bildschirm legt iOS beim Hinzufügen fest: am besten das Symbol in Safari wählen und erst dann „Zum Home-Bildschirm“. Eine schon installierte App neu hinzuzufügen beginnt auf dem iPhone mit leerem Speicher – vorher alle Begehungen exportieren.</div>
+
         <div className="card stack" style={{ marginTop: 10 }}>
           <div className="small muted">Farbmodus</div>
           <Seg<Settings['theme']> value={s.theme} onChange={(v) => commit((x) => { x.theme = v; })} options={[{ value: 'auto', label: 'Automatisch' }, { value: 'light', label: 'Hell' }, { value: 'dark', label: 'Dunkel' }]} />
@@ -229,7 +251,7 @@ export default function SettingsScreen() {
 
         <div className="group-title">Über</div>
         <div className="card small muted">
-          Begehungsprotokoll v1.0 · Karten © OpenStreetMap-Mitwirkende, Luftbild © Esri u. a. · PDF mit pdf-lib, Vorschau mit pdf.js.
+          Trasso v1.4 · Karten © OpenStreetMap-Mitwirkende, Luftbild © Esri u. a. · PDF mit pdf-lib, Vorschau mit pdf.js.
         </div>
         {s.user.role === 'viewer' && (
           <div style={{ marginTop: 12 }}><Banner kind="info">Als „Lesender Benutzer“ sind Bearbeitungen gesperrt. Rolle oben zurückstellen, um wieder zu bearbeiten.</Banner></div>

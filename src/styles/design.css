@@ -183,7 +183,6 @@
 .splash h1 { font-size: 32px; margin: 14px 0 6px; font-weight: 700; position: relative; }
 .splash p { margin: 0; opacity: 0.85; font-size: 16px; position: relative; }
 .splash .ver { position: absolute; bottom: calc(var(--safe-b) + 18px); font-size: 12px; opacity: 0.6; }
-.splash svg.scene { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 48%; }
 .splash .logo { position: relative; }
 
 /* ================================================================ Offline-Hinweis */
@@ -230,3 +229,36 @@
 .big-defect { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 78px; border-radius: 18px; background: #c0392b; color: #fff; font-size: 19px; font-weight: 700; box-shadow: 0 4px 16px rgba(192, 57, 43, 0.35); }
 .big-defect:active { transform: scale(0.98); }
 .hero-place { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; opacity: 0.9; }
+
+/* ================================================================ App-Symbol */
+.app-logo { display: block; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+.hero-place .app-logo { box-shadow: none; border-radius: 8px !important; }
+.hero-place b { font-weight: 700; letter-spacing: 0.2px; }
+.logo-choice { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+.logo-choice button { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 2px; border-radius: 14px; background: var(--bg-elev); box-shadow: 0 1px 0 var(--sep); }
+.logo-choice img { width: 100%; max-width: 64px; aspect-ratio: 1; border-radius: 22.5%; }
+.logo-choice span { font-size: 11px; line-height: 1.2; text-align: center; color: var(--text-2); }
+.logo-choice button.on { box-shadow: 0 0 0 2.5px var(--accent); }
+.logo-choice button.on span { color: var(--accent); font-weight: 600; }
+
+/* ================================================================ Startanimation je App-Symbol */
+.splash-logo { width: 156px; height: 156px; border-radius: 35px; overflow: hidden; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08); animation: sp-in 0.5s cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+.splash-logo svg { display: block; width: 100%; height: 100%; }
+.splash h1 { animation: sp-up 0.5s ease-out 0.75s both; }
+.splash p { animation: sp-up 0.5s ease-out 0.9s both; }
+.splash-logo .a-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: sp-draw 0.7s ease-out forwards; animation-delay: calc(0.25s + var(--i, 0) * 0.09s); }
+.splash-logo .a-draw.a-slow { animation-duration: 1.2s; }
+.splash-logo .a-pop { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: sp-pop 0.4s cubic-bezier(0.3, 1.7, 0.5, 1) forwards; animation-delay: calc(0.7s + var(--i, 0) * 0.08s); }
+.splash-logo .a-drop { transform-box: fill-box; transform-origin: center; animation: sp-drop 0.65s cubic-bezier(0.3, 1.45, 0.5, 1) both; animation-delay: calc(0.2s + var(--i, 0) * 0.1s); }
+.splash-logo .a-fade { opacity: 0; animation: sp-fade 0.45s ease forwards; animation-delay: calc(0.15s + var(--i, 0) * 0.1s); }
+.splash-logo .a-glow { transform-box: fill-box; transform-origin: center; animation: sp-glow 1.1s ease-in-out 1.2s infinite alternate; }
+@keyframes sp-in { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sp-up { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sp-draw { to { stroke-dashoffset: 0; } }
+@keyframes sp-pop { to { transform: scale(1); } }
+@keyframes sp-drop { from { transform: translateY(-160%); opacity: 0; } 40% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes sp-fade { to { opacity: 1; } }
+@keyframes sp-glow { from { opacity: 0.55; transform: scale(0.85); } to { opacity: 1; transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) {
+  .splash-logo, .splash-logo *, .splash h1, .splash p { animation: none !important; stroke-dashoffset: 0 !important; transform: none !important; opacity: 1 !important; }
+}

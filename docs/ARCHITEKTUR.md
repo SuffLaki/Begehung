@@ -136,6 +136,10 @@ markiert. Fehlt Richtung oder Entfernung, wird **keine** Position erfunden – d
 
 ## Design, Dashboard & Baustellenkontrolle
 
+* Name: **Trasso**. App-Symbole in `src/brand/logos.ts` (SVG, Gruppen Breitband/Allgemein, mit Animations-Klassen für die Startanimation in `ui/Splash.tsx`), Auswahl `Settings.appLogo`.
+  Feste PNGs in `public/icons/` aus dem Standard-Logo „Glasfaser“; ein anderes Logo setzt `applyLogo` zur Laufzeit als
+  apple-touch-icon/Favicon. iOS legt das Home-Symbol beim Hinzufügen fest; Home-Bildschirm-Apps haben eigenen
+  Speicher, Neu-Hinzufügen startet also leer (vorher exportieren).
 * Darstellung (`Settings.design`: `trasse` grün · `magenta` · `klassisch`, plus `textSize`) über `data-design`/`data-styled`/`data-text`
   am `<html>`; Farben in `src/styles/design.css`. Globale Leiste `ui/AppTabs.tsx` (Übersicht, Begehungen, +, Meldungen, Profil).
 * Startseite (`screens/Home.tsx`) ist das Dashboard: Ort (Reverse-Geocoding der letzten GPS-Position, nur mit Standort-Freigabe),

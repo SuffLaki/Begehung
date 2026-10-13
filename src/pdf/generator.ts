@@ -48,7 +48,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
   const docName = site ? 'Mängelbericht' : 'Begehungsprotokoll';
   doc.setTitle(san(`${docName} ${insp.meta.projectName}`));
   doc.setAuthor(san(insp.meta.inspector || settings.company.name));
-  doc.setCreator('Begehungsprotokoll-App');
+  doc.setCreator('Trasso');
   doc.setCreationDate(new Date());
 
   const L = new Layout(doc, tpl);

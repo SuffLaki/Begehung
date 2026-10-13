@@ -459,6 +459,8 @@ export interface Settings {
   theme: 'auto' | 'light' | 'dark';
   /** Farbdesign der App */
   design?: 'trasse' | 'magenta' | 'klassisch';
+  /** App-Symbol (siehe src/brand/logos.ts) */
+  appLogo?: string;
   /** Schriftgröße */
   textSize?: 'normal' | 'large';
   user: User;

@@ -15,6 +15,7 @@ import PdfPreview from './screens/PdfPreview';
 import FinishCheck from './screens/FinishCheck';
 import Meldungen from './screens/Meldungen';
 import Splash, { OfflineNotice } from './ui/Splash';
+import { applyLogo } from './brand/logos';
 
 let started = false;
 
@@ -24,6 +25,7 @@ export default function App() {
   const theme = useApp((s) => s.settings.theme);
   const design = useApp((s) => s.settings.design ?? 'trasse');
   const textSize = useApp((s) => s.settings.textSize ?? 'normal');
+  const appLogo = useApp((s) => s.settings.appLogo);
 
   useEffect(() => {
     if (started) return;
@@ -44,6 +46,8 @@ export default function App() {
     const bar = design === 'trasse' ? (dark ? '#133a2e' : '#18493a') : design === 'magenta' ? (dark ? '#6e003b' : '#b8005f') : dark ? '#000000' : '#f2f2f7';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bar);
   }, [theme, design, textSize]);
+
+  useEffect(() => { if (loaded) void applyLogo(appLogo); }, [loaded, appLogo]);
 
   if (!loaded) return <div className="app"><Loading /><Splash /></div>;
 
