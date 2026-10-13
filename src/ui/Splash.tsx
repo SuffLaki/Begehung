@@ -48,14 +48,14 @@ export default function Splash() {
           <p key={`p-${run}`}>Trassen &amp; Baustellen – digital dokumentiert.</p>
         </>
       )}
-      <div className="ver">Version 1.4</div>
+      <div className="ver">Version 1.5</div>
     </div>
   );
 }
 
 /** Einmaliger Hinweis, wenn die Verbindung wegfällt */
 export function OfflineNotice() {
-  const online = useApp((s) => s.online);
+  const online = useApp((s) => s.deviceOnline || !!s.settings.offlineMode);
   const pending = useApp((s) => s.pendingJobs);
   const [show, setShow] = useState(false);
   const [seen, setSeen] = useState(false);

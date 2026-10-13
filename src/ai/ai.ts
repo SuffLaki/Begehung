@@ -9,7 +9,7 @@
 //  * Ergebnisse sind Vorschläge und müssen vom Benutzer bestätigt werden.
 
 import type { AiSettings, LineType } from '../model/types';
-import { useApp } from '../state/appStore';
+import { useApp, isOnline, offlineText } from '../state/appStore';
 import { GeminiProvider } from './gemini';
 import { numbersIn, type Direction, type NoteDraft, type RouteLeg, type Turn } from '../speech/parsers';
 
@@ -42,7 +42,7 @@ export function aiConfigured(s: AiSettings = useApp.getState().settings.ai): boo
 export function getAi(): AiProvider {
   const s = useApp.getState().settings.ai;
   if (!aiConfigured(s)) throw new AiUnavailableError('KI ist nicht eingerichtet (Einstellungen → KI-Assistent).');
-  if (!navigator.onLine) throw new AiUnavailableError('Keine Internetverbindung – KI-Funktionen sind offline nicht verfügbar.');
+  if (!isOnline()) throw new AiUnavailableError(offlineText('KI-Funktionen'));
   switch (s.provider) {
     case 'gemini':
       return new GeminiProvider(s.apiKey.trim(), s.model.trim() || 'gemini-3.5-flash-lite');
@@ -53,7 +53,7 @@ export function getAi(): AiProvider {
 
 /** Netzwerkfehler (Funkloch) von inhaltlichen Fehlern unterscheiden → Auftrag später wiederholen */
 export function isNetworkError(e: unknown): boolean {
-  return e instanceof TypeError || (e instanceof AiUnavailableError && !navigator.onLine);
+  return e instanceof TypeError || (e instanceof AiUnavailableError && !isOnline());
 }
 
 // ---------------------------------------------------------------- Prompts

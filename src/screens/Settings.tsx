@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Building2, ImagePlus, Plus, Play, RotateCcw, ShieldCheck, Sparkles, Trash2, User as UserIcon, X } from 'lucide-react';
+import { Building2, ImagePlus, MonitorSmartphone, Plus, Play, RotateCcw, ShieldCheck, Sparkles, Trash2, User as UserIcon, X } from 'lucide-react';
 import { useApp, toast, errorText, confirmDialog } from '../state/appStore';
 import { LOGOS, getLogo, logoDataUrl } from '../brand/logos';
 import { replaySplash } from '../ui/Splash';
-import { Banner, Field, Nav, Seg, SelectField, SwitchRow, Spinner } from '../ui/kit';
+import { Banner, Field, Nav, Row, Seg, SelectField, SwitchRow, Spinner } from '../ui/kit';
 import type { MapType, Role, Settings } from '../model/types';
 import { DEFAULT_CATEGORIES, DEFAULT_LINE_TYPES, uid } from '../model/factory';
 import { ROLE_LABELS, can } from '../model/permissions';
@@ -11,7 +11,7 @@ import { MAP_TYPES } from '../map/providers';
 import { pickFile, loadImage, scaleToCanvas } from '../camera/photo';
 import { storageEstimate } from '../storage/db';
 import { getAi } from '../ai/ai';
-import { getSync } from '../sync/sync';
+import { navigate } from '../router';
 import AppTabs from '../ui/AppTabs';
 
 export default function SettingsScreen() {
@@ -238,12 +238,19 @@ export default function SettingsScreen() {
         </div>
         <div className="group-foot">Platzhalter: {'{projekt} {nummer} {datum} {begeher} {auftraggeber}'}</div>
 
+        {/* ------------------------------------------------ Verbindung */}
+        <div className="group-title">Verbindung &amp; Abgleich</div>
+        <div className="list">
+          <SwitchRow title="Offline-Modus" sub="Keine Datenverbindung: KI, Adresssuche und neue Kartenausschnitte pausieren, alles andere läuft weiter" checked={!!s.offlineMode}
+            onChange={(v) => { void useApp.getState().setOfflineMode(v); toast(v ? 'Offline-Modus an.' : 'Online – Ausstehendes wird nachgeholt.', 'info'); }} />
+          <Row icon={<MonitorSmartphone size={16} />} iconBg="#23824f" title="Desktop-Abgleich" sub="Sync-Pakete für die Trasso-Desktop-App" onClick={() => navigate('/sync')} />
+        </div>
+
         {/* ------------------------------------------------ Speicher */}
         <div className="group-title">Speicher & Datenschutz</div>
         <div className="list">
           <div className="row"><div className="row-main"><div className="row-title">Belegt</div></div><div className="row-value">{usage ? `${mb(usage.usage)}${usage.quota ? ` von ${mb(usage.quota)}` : ''}` : '–'}</div></div>
           <div className="row"><div className="row-main"><div className="row-title">Dauerhaft gespeichert</div><div className="row-sub">Schutz vor automatischem Löschen durch iOS</div></div><div className="row-value">{persisted === null ? 'unbekannt' : persisted ? 'ja' : 'nein'}</div></div>
-          <div className="row"><div className="row-main"><div className="row-title">Synchronisierung</div></div><div className="row-value">{getSync().label}</div></div>
         </div>
         <div className="group-foot">
           Alle Begehungen, Fotos und Standortdaten liegen nur in diesem Browser-Speicher auf dem Gerät (durch die iPhone-Gerätesperre verschlüsselt). iOS kann Daten von Web-Apps löschen, die lange nicht geöffnet wurden – daher als App zum Home-Bildschirm hinzufügen und regelmäßig Sicherungen bzw. PDFs teilen.
@@ -251,7 +258,7 @@ export default function SettingsScreen() {
 
         <div className="group-title">Über</div>
         <div className="card small muted">
-          Trasso v1.4 · Karten © OpenStreetMap-Mitwirkende, Luftbild © Esri u. a. · PDF mit pdf-lib, Vorschau mit pdf.js.
+          Trasso v1.5 · Karten © OpenStreetMap-Mitwirkende, Luftbild © Esri u. a. · PDF mit pdf-lib, Vorschau mit pdf.js.
         </div>
         {s.user.role === 'viewer' && (
           <div style={{ marginTop: 12 }}><Banner kind="info">Als „Lesender Benutzer“ sind Bearbeitungen gesperrt. Rolle oben zurückstellen, um wieder zu bearbeiten.</Banner></div>

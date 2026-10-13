@@ -7,6 +7,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GeoFix, Inspection, LatLng, MapBounds, MapType, PlanGeoref } from '../model/types';
 import { MAP_TYPES, MAX_ZOOM } from './providers';
+import { CacheOnlyTileLayer } from './tileCache';
+import { useApp } from '../state/appStore';
 import { endpoints, isRelevantPoint } from '../geo/routeOps';
 import { pointDisplayName, SYMBOLS } from '../model/factory';
 import { boundsOf } from '../geo/geo';
@@ -81,6 +83,7 @@ function fit(map: L.Map, insp: Inspection, fallback: GeoFix | null, plan?: Props
 }
 
 export default function RouteMap(props: Props) {
+  const online = useApp((s) => s.online);
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const tilesRef = useRef<L.LayerGroup | null>(null);
@@ -162,15 +165,17 @@ export default function RouteMap(props: Props) {
     const layers = MAP_TYPES[props.mapType].layers;
     const attributions = [...new Set(layers.map((l) => l.attribution))].join(' · ');
     layers.forEach((src, i) => {
-      L.tileLayer(src.url, {
+      // offline: nur schon gespeicherte Kacheln, kein Datenverkehr
+      const make = (url: string, o: L.TileLayerOptions) => (online ? L.tileLayer(url, o) : new CacheOnlyTileLayer(url, o));
+      make(src.url, {
         maxNativeZoom: src.maxNativeZoom,
         maxZoom: MAX_ZOOM,
         crossOrigin: 'anonymous',
-        attribution: i === 0 ? attributions : undefined,
+        attribution: i === 0 ? attributions + (online ? '' : ' · offline: nur gespeicherte Ausschnitte') : undefined,
         opacity: src.opacity ?? 1,
       }).addTo(g);
     });
-  }, [props.mapType]);
+  }, [props.mapType, online]);
 
   // ------------------------------------------------ Einpassen / Zentrieren
   useEffect(() => {

@@ -461,6 +461,8 @@ export interface Settings {
   design?: 'trasse' | 'magenta' | 'klassisch';
   /** App-Symbol (siehe src/brand/logos.ts) */
   appLogo?: string;
+  /** Offline-Modus von Hand: die App baut keine Verbindungen auf (KI, Adresssuche, Kartenkacheln) */
+  offlineMode?: boolean;
   /** Schriftgröße */
   textSize?: 'normal' | 'large';
   user: User;

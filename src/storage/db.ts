@@ -130,6 +130,9 @@ export async function deleteInspection(id: string): Promise<void> {
     for (const k of keys) await s.delete(k);
   }
   await tx.done;
+  // für den Desktop-Abgleich merken, dass die Begehung gelöscht wurde
+  const { addTombstone } = await import('../sync/syncState');
+  await addTombstone(id);
 }
 
 // ---------------------------------------------------------------- projects

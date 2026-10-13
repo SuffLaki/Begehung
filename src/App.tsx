@@ -15,6 +15,8 @@ import PdfPreview from './screens/PdfPreview';
 import FinishCheck from './screens/FinishCheck';
 import Meldungen from './screens/Meldungen';
 import Splash, { OfflineNotice } from './ui/Splash';
+import ConnectionSheet from './ui/ConnectionSheet';
+import DesktopSync from './screens/DesktopSync';
 import { applyLogo } from './brand/logos';
 
 let started = false;
@@ -56,6 +58,7 @@ export default function App() {
   if (!a) screen = <Home />;
   else if (a === 'list') screen = <InspectionList />;
   else if (a === 'meldungen') screen = <Meldungen />;
+  else if (a === 'sync') screen = <DesktopSync />;
   else if (a === 'new') screen = <InspectionForm />;
   else if (a === 'templates') screen = <Templates />;
   else if (a === 'settings') screen = <SettingsScreen />;
@@ -74,6 +77,7 @@ export default function App() {
       <DialogHost />
       <Toasts />
       <OfflineNotice />
+      <ConnectionSheet />
       <Splash />
     </div>
   );

@@ -1,6 +1,8 @@
-// Schnittstelle für einen späteren Server-Abgleich (mehrere Geräte/Benutzer).
+// Schnittstelle für einen späteren direkten Abgleich (Desktop-App im Netz oder Server).
 //
-// Aktuell: LocalOnlySync – nichts verlässt das Gerät. Für einen Server wird eine
+// Heute gibt es den Abgleich per Datei: sync/syncPackage.ts (Sync-Paket, Format in docs/SYNC.md),
+// mit Änderungsverfolgung und Grabsteinen in sync/syncState.ts. Ein direkter Adapter würde
+// dieselben Pakete über das Netz austauschen. Bis dahin: LocalOnlySync – nichts verlässt das Gerät von selbst. Für einen Server wird eine
 // Klasse implementiert, die Begehungen + Fotos hoch-/herunterlädt (z. B. REST mit
 // Login-Token), und in getSync() zurückgegeben. Konflikte lassen sich über
 // Inspection.updatedAt bzw. eine Versionsnummer pro Objekt auflösen; jedes Objekt

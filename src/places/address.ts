@@ -2,12 +2,12 @@
 // Läuft im Hintergrund – die Aufnahme selbst wartet nie darauf.
 
 import type { LatLng } from '../model/types';
-import { useApp } from '../state/appStore';
+import { useApp, isOnline } from '../state/appStore';
 import { useInspection } from '../state/inspectionStore';
 import { reverseGeocode } from './osm';
 
 export function addressAllowed(): boolean {
-  return navigator.onLine && useApp.getState().settings.placeSearch !== false;
+  return isOnline() && useApp.getState().settings.placeSearch !== false;
 }
 
 export function enrichAddress(target: 'photo' | 'note', id: string, pos: LatLng | null | undefined) {
@@ -48,4 +48,4 @@ export async function fillMissingAddresses(): Promise<void> {
   }
 }
 
-if (typeof window !== 'undefined') window.addEventListener('online', () => void fillMissingAddresses());
+if (typeof window !== 'undefined') window.addEventListener('trasso:online', () => void fillMissingAddresses());

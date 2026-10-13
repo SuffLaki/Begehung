@@ -9,6 +9,7 @@
 // keine Projektdaten. Daten © OpenStreetMap-Mitwirkende (ODbL).
 
 import type { LatLng } from '../model/types';
+import { isOnline, offlineText } from '../state/appStore';
 import { distance, distanceToSegment } from '../geo/geo';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
@@ -44,7 +45,7 @@ function throttled<T>(key: string, fn: () => Promise<T>): Promise<T> {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  if (!navigator.onLine) throw new Error('Keine Internetverbindung – Adressen können nur online gesucht werden.');
+  if (!isOnline()) throw new Error(offlineText('Adresssuche'));
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), 15000);
   try {

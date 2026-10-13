@@ -5,6 +5,8 @@
 // Trasse auf neutralem Raster gezeichnet und das im Ergebnis gemeldet.
 
 import type { Inspection, MapBounds, PdfSettings, PlanSheet } from '../model/types';
+import { isOnline } from '../state/appStore';
+import { cachedTile } from './tileCache';
 import { overlayPlan, planImage } from '../plans/plans';
 import { MAP_TYPES, attributionOf, tileUrl } from './providers';
 import { endpoints, isRelevantPoint } from '../geo/routeOps';
@@ -64,6 +66,11 @@ export function frameBounds(b: MapBounds, aspect: number): MapBounds {
 }
 
 async function loadTile(url: string): Promise<ImageBitmap | null> {
+  if (!isOnline()) {
+    // offline: nur Kacheln, die schon einmal angesehen wurden
+    const hit = await cachedTile(url);
+    return hit ? createImageBitmap(hit).catch(() => null) : null;
+  }
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 10000);
   try {

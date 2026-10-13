@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Camera, Navigation, Route as RouteIcon, Sparkles, Trash2, X } from 'lucide-react';
 import { useInspection } from '../../state/inspectionStore';
-import { useApp, confirmDialog, toast } from '../../state/appStore';
+import { useApp, confirmDialog, toast, isOnline } from '../../state/appStore';
 import type { GeoFix, Note } from '../../model/types';
 import { SITE_CATEGORIES, newNote, pointDisplayName } from '../../model/factory';
 import { orderedPoints } from '../../geo/routeOps';
@@ -122,7 +122,7 @@ export default function NoteSheet() {
         <div className="list">
           <SelectField label="Trassenpunkt" value={draft.pointId ?? ''} onChange={(v) => set('pointId')(v || null)}
             options={[{ value: '', label: '– keiner –' }, ...orderedPoints(insp).map((p) => ({ value: p.id, label: `${pointDisplayName(p)}${p.title ? ' – ' + p.title : ''}` }))]} />
-          {draft.position && <Row title="Adresse" value={existing?.address || (!addressAllowed() ? (navigator.onLine ? 'Adresssuche ausgeschaltet' : 'wird nachgetragen (offline)') : 'wird beim Sichern ermittelt …')} chevron={false} />}
+          {draft.position && <Row title="Adresse" value={existing?.address || (!addressAllowed() ? (isOnline() ? 'Adresssuche ausgeschaltet' : 'wird nachgetragen (offline)') : 'wird beim Sichern ermittelt …')} chevron={false} />}
           <Row title="Koordinaten" value={draft.position ? formatCoord(draft.position, 6) : 'keine'} chevron={false}
             right={canEdit ? (
               <button className="icon-btn" aria-label="Aktuelle Position übernehmen" onClick={async () => {

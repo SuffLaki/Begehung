@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Sparkles, Wand2, MapPinned, Info, Trash2 } from 'lucide-react';
 import { useInspection } from '../../state/inspectionStore';
-import { useApp, toast, errorText } from '../../state/appStore';
+import { useApp, toast, errorText, isOnline } from '../../state/appStore';
 import { WavRecorder, ensureMicConsent, micSupported } from '../../speech/audioRecorder';
 import {
   applyLegs, assignLineTypes, legSummary, parseObservation, parseRouteText, refersToStart, DIRECTION_LABEL, TURN_LABEL,
@@ -110,9 +110,9 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
     const { wav, seconds } = await r.stop();
     if (seconds < 0.8) { setPhase('input'); toast('Aufnahme zu kurz.', 'error'); return; }
     audioUsed.current = true;
-    if (!navigator.onLine) {
+    if (!isOnline()) {
       await queueVoiceJob(insp.id, mode === 'note' ? 'voice-note' : 'voice-route', wav, seconds);
-      toast('Offline: Aufnahme gespeichert. Sie wird ausgewertet, sobald Internet da ist, und erscheint dann unter Notizen.', 'success');
+      toast('Offline: Aufnahme gespeichert. Sie wird ausgewertet, sobald die App wieder online ist, und erscheint dann unter Notizen.', 'success');
       close();
       return;
     }
@@ -182,9 +182,9 @@ function VoiceSheetInner({ initialMode, initialText }: { initialMode: VoiceMode;
     if (mode !== 'route' || !settings.placeSearch || !hasPlaces(t)) { setPlaces(null); return; }
     const pieces = parsePlaces(t, types);
     if (!pieces.length) { setPlaces(null); return; }
-    if (!navigator.onLine) {
+    if (!isOnline()) {
       setPlaces(null);
-      setPlaceError('Straßen/Hausnummern erkannt – die Adresssuche braucht aber Internet. Bitte später erneut „Auswerten“.');
+      setPlaceError('Straßen/Hausnummern erkannt – die Adresssuche braucht aber eine Verbindung (App ist offline). Bitte später erneut „Auswerten“.');
       return;
     }
     setPhase('processing');

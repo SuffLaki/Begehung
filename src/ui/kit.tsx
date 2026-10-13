@@ -203,9 +203,12 @@ export function Loading({ text }: { text?: string }) {
 export function SyncPill() {
   const online = useApp((s) => s.online);
   const pending = useApp((s) => s.pendingJobs);
-  if (!online) return <span className="pill off"><CloudOff size={14} />Offline{pending ? ` · ${pending} ausstehend` : ''}</span>;
-  if (pending) return <span className="pill warn"><RefreshCw size={14} />{pending} ausstehend</span>;
-  return <span className="pill ok"><Wifi size={14} />Online</span>;
+  const manual = useApp((s) => !!s.settings.offlineMode);
+  // antippen öffnet den Online/Offline-Regler (ConnectionSheet)
+  const open = () => useApp.setState({ connOpen: true });
+  if (!online) return <button className="pill off" onClick={open} aria-label="Verbindung: offline – ändern"><CloudOff size={14} />Offline{manual ? ' (Hand)' : ''}{pending ? ` · ${pending} ausstehend` : ''}</button>;
+  if (pending) return <button className="pill warn" onClick={open} aria-label="Verbindung: online – ändern"><RefreshCw size={14} />{pending} ausstehend</button>;
+  return <button className="pill ok" onClick={open} aria-label="Verbindung: online – ändern"><Wifi size={14} />Online</button>;
 }
 
 export function Banner(props: { kind?: 'warn' | 'info' | 'danger' | 'ok'; icon?: ReactNode; children: ReactNode; onClick?: () => void }) {

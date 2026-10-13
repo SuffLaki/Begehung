@@ -211,10 +211,20 @@ markiert. Fehlt Richtung oder Entfernung, wird **keine** Position erfunden – d
 `model/permissions.ts`: Admin / Mitarbeiter / Lesender Benutzer mit Rechte-Matrix; die UI fragt nur `can()`.
 Ohne Login ist die Rolle eine lokale Einstellung. Ein späterer Login liefert Benutzer + Rolle, ohne UI-Umbau.
 
+## Verbindung (Online/Offline-Regler)
+
+* `Settings.offlineMode` = Offline von Hand. Wirksamer Zustand `useApp.online` = Gerät hat Netz **und** Offline-Modus aus;
+  Netzfunktionen fragen `isOnline()` (KI, Nominatim/Routing, Kacheln für das PDF, Warteschlange).
+* Offline lädt die Karte nur Kacheln aus dem Service-Worker-Cache `map-tiles` (`map/tileCache.ts`, `CacheOnlyTileLayer`).
+* Wird die App wieder online, feuert `trasso:online` → Warteschlange (`sync/jobs.ts`) und fehlende Adressen
+  (`places/address.ts`) laufen nach. Regler: Antippen des Online-Feldes (`ui/ConnectionSheet.tsx`) oder in den Einstellungen.
+
 ## Synchronisierung
 
-Es gibt keinen Server. `sync/sync.ts` definiert `SyncAdapter` (push/pull); aktiv ist `LocalOnlySync`.
-Bis dahin: Sicherung pro Begehung als Datei (inkl. Fotos) exportieren/importieren.
+Kein Server. Vorbereitung für die Desktop-App: **Sync-Pakete** per Datei (`sync/syncPackage.ts`, Seite `#/sync`),
+Änderungsverfolgung, Geräte-ID und Grabsteine in `sync/syncState.ts` (Datensatz `sync-state` im Store `settings`).
+Format und Konfliktregeln: **docs/SYNC.md**. `sync/sync.ts` (`SyncAdapter`) bleibt die Schnittstelle für einen späteren
+direkten Abgleich. Daneben weiter: Sicherung einer einzelnen Begehung als Datei.
 
 ## Echte Browser-/iOS-Einschränkungen
 

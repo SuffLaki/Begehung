@@ -3,7 +3,7 @@ import { Sparkles, Trash2, MapPin, CheckCircle2, PenLine, Download } from 'lucid
 import { AnnotatedPhoto } from '../../annotate/AnnotationLayer';
 import { legendText } from '../../annotate/lines';
 import { useInspection } from '../../state/inspectionStore';
-import { useApp, confirmDialog, toast, errorText } from '../../state/appStore';
+import { useApp, confirmDialog, toast, errorText, isOnline } from '../../state/appStore';
 import type { PhotoMeta } from '../../model/types';
 import { usePhotoUrl } from '../../camera/photoUrls';
 import { getPhotoBlob } from '../../storage/db';
@@ -128,7 +128,7 @@ export default function PhotoSheet() {
         <div className="list">
           <Row title="Aufgenommen" value={fmtDateTime(f.takenAt)} chevron={false} />
           <Row title="Koordinaten" value={f.position ? `${formatCoord(f.position)}${f.positionSource === 'address' ? ' (aus Adresse)' : ''}` : 'keine Position'} chevron={false} />
-          <Row title="Adresse" value={f.address || f.placeLabel || (f.position ? (navigator.onLine ? 'wird ermittelt …' : 'wird nachgetragen (offline)') : '–')} chevron={false} />
+          <Row title="Adresse" value={f.address || f.placeLabel || (f.position ? (isOnline() ? 'wird ermittelt …' : 'wird nachgetragen (offline)') : '–')} chevron={false} />
           {f.placeLabel && <Row title="Ort" value={f.placeLabel} chevron={false} />}
           {f.position && <Row title="Genauigkeit" value={acc.text} chevron={false} />}
           <Row title="Größe" value={`${f.width} × ${f.height} px`} chevron={false} />

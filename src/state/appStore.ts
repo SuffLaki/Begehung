@@ -24,13 +24,19 @@ interface ConfirmRequest {
 interface AppState {
   settings: Settings;
   settingsLoaded: boolean;
+  /** wirksamer Zustand: Gerät hat Netz UND Offline-Modus ist aus */
   online: boolean;
+  /** Netz laut Gerät (navigator.onLine) */
+  deviceOnline: boolean;
+  /** Verbindungs-Fenster offen */
+  connOpen: boolean;
   pendingJobs: number;
   toasts: Toast[];
   confirmReq: ConfirmRequest | null;
   initSettings(): Promise<void>;
   updateSettings(fn: (s: Settings) => void): Promise<void>;
   setOnline(v: boolean): void;
+  setOfflineMode(v: boolean): Promise<void>;
   setPendingJobs(n: number): void;
   toast(text: string, kind?: Toast['kind'], action?: Toast['action']): void;
   dismissToast(id: number): void;
@@ -42,13 +48,15 @@ export const useApp = create<AppState>((set, get) => ({
   settings: defaultSettings(),
   settingsLoaded: false,
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
+  deviceOnline: typeof navigator === 'undefined' ? true : navigator.onLine,
+  connOpen: false,
   pendingJobs: 0,
   toasts: [],
   confirmReq: null,
 
   async initSettings() {
     const s = await loadSettings();
-    set({ settings: s, settingsLoaded: true });
+    set({ settings: s, settingsLoaded: true, online: get().deviceOnline && !s.offlineMode });
   },
 
   async updateSettings(fn) {
@@ -58,7 +66,20 @@ export const useApp = create<AppState>((set, get) => ({
     await saveSettings(next);
   },
 
-  setOnline: (v) => set({ online: v }),
+  setOnline(v) {
+    const was = get().online;
+    const online = v && !get().settings.offlineMode;
+    set({ deviceOnline: v, online });
+    if (online && !was) window.dispatchEvent(new Event('trasso:online'));
+  },
+
+  async setOfflineMode(v) {
+    const was = get().online;
+    await get().updateSettings((s) => { s.offlineMode = v; });
+    const online = get().deviceOnline && !v;
+    set({ online });
+    if (online && !was) window.dispatchEvent(new Event('trasso:online'));
+  },
   setPendingJobs: (n) => set({ pendingJobs: n }),
 
   toast(text, kind = 'info', action) {
@@ -69,6 +90,19 @@ export const useApp = create<AppState>((set, get) => ({
 
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
+
+/** true, wenn die App Netzverbindungen nutzen darf und das Gerät Netz hat */
+export function isOnline(): boolean {
+  return useApp.getState().online;
+}
+
+/** Erklärung, warum gerade nichts aus dem Netz geht */
+export function offlineText(what: string): string {
+  const st = useApp.getState();
+  return st.settings.offlineMode && st.deviceOnline
+    ? `Offline-Modus ist eingeschaltet – ${what} erst nach Umschalten auf „Online“.`
+    : `Keine Internetverbindung – ${what} erst wieder mit Netz.`;
+}
 
 export const toast = (text: string, kind?: Toast['kind'], action?: Toast['action']) => useApp.getState().toast(text, kind, action);
 

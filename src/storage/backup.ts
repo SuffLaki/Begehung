@@ -34,11 +34,35 @@ export async function exportInspection(id: string): Promise<{ blob: Blob; fileNa
   return { blob: new Blob([JSON.stringify(data)], { type: 'application/json' }), fileName: `${name}.json` };
 }
 
-function b64ToBlob(b64: string, type: string): Blob {
+export function b64ToBlob(b64: string, type: string): Blob {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type });
+}
+
+/**
+ * Macht aus einer Begehung eine eigenständige Kopie: neue IDs für Begehung, Fotos und Pläne
+ * (Verweise werden umgeschrieben). Liefert alte → neue ID für Fotos/Pläne.
+ */
+export function copyWithNewIds(insp: Inspection, nameSuffix: string): Map<string, string> {
+  const newIds = new Map<string, string>();
+  insp.id = uid('i');
+  insp.meta.projectName = `${insp.meta.projectName}${nameSuffix}`;
+  for (const f of insp.photos) {
+    const nid = uid('f');
+    newIds.set(f.id, nid);
+    f.id = nid;
+  }
+  for (const pl of insp.plans ?? []) {
+    const nid = uid('pl');
+    newIds.set(pl.id, nid);
+    pl.id = nid;
+  }
+  for (const p of insp.route.points) if (p.planId) p.planId = newIds.get(p.planId) ?? p.planId;
+  if (insp.basemap?.kind === 'plan') insp.basemap = { kind: 'plan', planId: newIds.get(insp.basemap.planId) ?? insp.basemap.planId };
+  if (insp.overlay) insp.overlay = { ...insp.overlay, planId: newIds.get(insp.overlay.planId) ?? insp.overlay.planId };
+  return newIds;
 }
 
 /** Importiert eine Sicherung. Existiert die Begehung schon, wird eine Kopie mit neuer ID angelegt. */
@@ -51,24 +75,7 @@ export async function importInspection(file: Blob): Promise<Inspection> {
   }
   if (data?.format !== 'begehungsprotokoll-backup' || !data.inspection?.id) throw new Error('Die Datei ist keine Begehungs-Sicherung.');
   const insp = data.inspection;
-  const newIds = new Map<string, string>();
-  if (await getInspection(insp.id)) {
-    // Kopie: neue IDs, damit sich Original und Kopie keine Fotos teilen
-    insp.id = uid('i');
-    insp.meta.projectName = `${insp.meta.projectName} (Kopie)`;
-    for (const f of insp.photos) {
-      const nid = uid('f');
-      newIds.set(f.id, nid);
-      f.id = nid;
-    }
-    for (const pl of insp.plans ?? []) {
-      const nid = uid('pl');
-      newIds.set(pl.id, nid);
-      pl.id = nid;
-    }
-    for (const p of insp.route.points) if (p.planId) p.planId = newIds.get(p.planId) ?? p.planId;
-    if (insp.basemap?.kind === 'plan') insp.basemap = { kind: 'plan', planId: newIds.get(insp.basemap.planId) ?? insp.basemap.planId };
-  }
+  const newIds = (await getInspection(insp.id)) ? copyWithNewIds(insp, ' (Kopie)') : new Map<string, string>();
   for (const pl of data.plans ?? []) {
     await savePlanBlob({ id: newIds.get(pl.id) ?? pl.id, inspectionId: insp.id, image: b64ToBlob(pl.image, 'image/jpeg') });
   }

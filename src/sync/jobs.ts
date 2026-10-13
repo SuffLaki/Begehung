@@ -9,7 +9,7 @@
 // die Schnittstelle SyncAdapter (sync.ts) angebunden.
 
 import { deleteJob, getInspection, listJobs, saveInspection, saveJob } from '../storage/db';
-import { useApp } from '../state/appStore';
+import { useApp, isOnline } from '../state/appStore';
 import { useInspection } from '../state/inspectionStore';
 import { aiConfigured, getAi, isNetworkError } from '../ai/ai';
 import { newNote, uid } from '../model/factory';
@@ -30,7 +30,7 @@ let running = false;
 
 /** Arbeitet die Warteschlange ab. Gibt die Anzahl erledigter Aufträge zurück. */
 export async function processJobs(): Promise<number> {
-  if (running || !navigator.onLine || !aiConfigured()) return 0;
+  if (running || !isOnline() || !aiConfigured()) return 0;
   running = true;
   let done = 0;
   try {
@@ -87,8 +87,9 @@ async function addNoteTo(inspectionId: string, note: Note) {
 
 export function startJobWatcher() {
   const tick = () => void processJobs();
-  window.addEventListener('online', () => { useApp.getState().setOnline(true); tick(); });
+  window.addEventListener('online', () => useApp.getState().setOnline(true));
   window.addEventListener('offline', () => useApp.getState().setOnline(false));
+  window.addEventListener('trasso:online', tick);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tick(); });
   window.setInterval(tick, 60_000);
   void refreshPendingCount().then(tick);
