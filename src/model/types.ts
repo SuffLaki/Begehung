@@ -111,6 +111,8 @@ export interface RoutePoint {
    * Bei Plänen ist position in Planpixeln: lng = x, lat = −y (Leaflet CRS.Simple).
    */
   planId?: ID;
+  /** Prüfstatus: offen / OK / Mangel */
+  check?: PointCheck;
   /** reiner Stützpunkt des Linienverlaufs (z. B. aus Routing) – ohne eigene Nummer in Karte/PDF */
   vertex?: boolean;
   /** Nachvollziehbarkeit für geschätzte Punkte */
@@ -161,7 +163,10 @@ export interface Route {
   tracks: GpsTrack[];
 }
 
-export type NoteStatus = 'open' | 'done' | 'info';
+export type NoteStatus = 'open' | 'progress' | 'done' | 'info';
+export type Priority = 'low' | 'medium' | 'high';
+/** Prüfergebnis eines Trassenpunktes (z. B. Mast geprüft) */
+export type PointCheck = 'open' | 'ok' | 'defect';
 export type NoteOrigin = 'text' | 'voice';
 
 export interface Note {
@@ -176,6 +181,14 @@ export interface Note {
   pointId: ID | null;
   position: GeoFix | null;
   status: NoteStatus;
+  /** Dringlichkeit (für Mängel) */
+  priority?: Priority;
+  /** Frist zur Beseitigung (YYYY-MM-DD) */
+  dueDate?: string;
+  /** zuständig (Person/Firma) */
+  assignee?: string;
+  /** Adresse am Aufnahmeort (aus OpenStreetMap, falls online ermittelt) */
+  address?: string;
   origin: NoteOrigin;
   /** wörtliche Spracheingabe – bleibt immer erhalten */
   transcript: string;
@@ -199,6 +212,8 @@ export interface PhotoMeta {
   category: string;
   description: string;
   aiSuggestion: string;
+  /** Adresse am Aufnahmeort (aus OpenStreetMap, falls online ermittelt) */
+  address?: string;
   width: number;
   height: number;
   /** 'address' = Position aus erkannter Adresse (OpenStreetMap), nicht vom GPS */
@@ -321,9 +336,14 @@ export interface PlanBlob {
   image: Blob;
 }
 
+/** Art der Erfassung: Trassenbegehung oder Baustellenkontrolle (Fotodoku mit Mängeln) */
+export type InspectionKind = 'begehung' | 'baustelle';
+
 export interface Inspection {
   id: ID;
   schemaVersion: 1;
+  /** Standard: Begehung */
+  kind?: InspectionKind;
   projectId: ID;
   meta: InspectionMeta;
   status: InspectionStatus;
@@ -353,6 +373,7 @@ export interface Inspection {
 export interface InspectionSummaryRow {
   id: ID;
   projectName: string;
+  kind?: InspectionKind;
   projectNumber: string;
   inspectionNumber: string;
   date: string;
@@ -436,6 +457,10 @@ export interface Settings {
   gps: { maxAccuracyM: number; locationConsent: boolean };
   micConsent: boolean;
   theme: 'auto' | 'light' | 'dark';
+  /** Farbdesign der App */
+  design?: 'trasse' | 'magenta' | 'klassisch';
+  /** Schriftgröße */
+  textSize?: 'normal' | 'large';
   user: User;
   mail: MailDefaults;
   defaultMapType: MapType;

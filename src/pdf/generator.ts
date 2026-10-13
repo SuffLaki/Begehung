@@ -11,7 +11,7 @@ import { formatDistance, hasUnscaledLength, routeLength, segmentLength, segmentP
 import { pointDisplayName } from '../model/factory';
 import { getPhotoBlob } from '../storage/db';
 import { canvasToBlob, loadImage, scaleToCanvas } from '../camera/photo';
-import { contentBounds, renderPlanMap, renderStaticMap } from '../map/staticMap';
+import { DEFECT_COLORS, contentBounds, renderPlanMap, renderStaticMap, siteDefects } from '../map/staticMap';
 import { drawAnnotations, legendText } from '../annotate/lines';
 
 export const MAP_ASPECT = 4 / 3;
@@ -23,7 +23,9 @@ export interface PdfResult {
 }
 
 const SOURCE_LABEL: Record<RoutePoint['source'], string> = { gps: 'GPS', voice: 'Sprache (geschätzt)', manual: 'manuell gesetzt', auto: 'automatisch' };
-const STATUS_LABEL: Record<Note['status'], string> = { open: 'offen', done: 'erledigt', info: 'zur Info' };
+const STATUS_LABEL: Record<Note['status'], string> = { open: 'offen', progress: 'in Bearbeitung', done: 'erledigt', info: 'zur Info' };
+const PRIO_LABEL = { low: 'Priorität niedrig', medium: 'Priorität mittel', high: 'Priorität hoch' } as const;
+const CHECK_LABEL = { open: 'offen', ok: 'OK – geprüft', defect: 'Mangel' } as const;
 
 export function formatDate(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -42,7 +44,9 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
   const warnings: string[] = [];
   const ps = insp.pdfSettings;
   const doc = await PDFDocument.create();
-  doc.setTitle(san(`Begehungsprotokoll ${insp.meta.projectName}`));
+  const site = insp.kind === 'baustelle';
+  const docName = site ? 'Mängelbericht' : 'Begehungsprotokoll';
+  doc.setTitle(san(`${docName} ${insp.meta.projectName}`));
   doc.setAuthor(san(insp.meta.inspector || settings.company.name));
   doc.setCreator('Begehungsprotokoll-App');
   doc.setCreationDate(new Date());
@@ -115,7 +119,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
 
   function caption(f: PhotoMeta): string {
     const parts = [`Foto ${f.number}`, time(f.takenAt)];
-    if (f.placeLabel) parts.push(f.placeLabel);
+    if (f.address || f.placeLabel) parts.push(f.address || f.placeLabel!);
     if (f.position) parts.push(`${f.positionSource === 'address' ? 'Position aus Adresse' : 'GPS'} ${coord(f.position.lat, f.position.lng)}${f.position.accuracy ? ` (±${Math.round(f.position.accuracy)} m)` : ''}`);
     if (f.pointId) parts.push(`Punkt ${pointName(f.pointId)}`);
     const lines = f.annotations?.length ? `\nEingezeichnet: ${legendText(f.annotations, settings.lineTypes)}` : '';
@@ -135,17 +139,17 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
       } catch { warnings.push('Firmenlogo konnte nicht eingebettet werden.'); }
     }
     L.y = L.top - (tpl.drawHeader && settings.company.logoDataUrl ? 26 : 8) * MM;
-    L.at('BEGEHUNGSPROTOKOLL', L.left, L.y, 10, L.bold, L.accent);
+    L.at(insp.kind === 'baustelle' ? 'BAUSTELLENKONTROLLE · MÄNGELBERICHT' : 'BEGEHUNGSPROTOKOLL', L.left, L.y, 10, L.bold, L.accent);
     L.y -= 30;
     L.text(m.projectName || 'Ohne Projektname', { size: 24, font: L.bold, after: 2 });
-    L.text(['Trassenbegehung', m.site].filter(Boolean).join(' · '), { size: 12, color: C.muted, after: 10 });
+    L.text([insp.kind === 'baustelle' ? 'Baustellenkontrolle' : 'Trassenbegehung', m.site].filter(Boolean).join(' · '), { size: 12, color: C.muted, after: 10 });
     L.page.drawRectangle({ x: L.left, y: L.y, width: L.width, height: 2, color: L.accent });
     L.y -= 16;
     L.kv([
       ['Projekt-/Auftragsnr.', m.projectNumber],
-      ['Begehungsnr.', m.inspectionNumber],
+      [site ? 'Kontrollnr.' : 'Begehungsnr.', m.inspectionNumber],
       ['Datum / Uhrzeit', `${formatDate(m.date)}${m.time ? `, ${m.time} Uhr` : ''}`],
-      ['Begeher', m.inspector],
+      [site ? 'Kontrolleur' : 'Begeher', m.inspector],
       ['Auftraggeber', m.client],
       ['Ansprechpartner', m.contactPerson],
       ['Baustelle / Bereich', m.site],
@@ -178,7 +182,13 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
       L.text(m.description, { size: 10 });
     }
     // Kennzahlen
-    const stats: [string, string][] = [
+    const defects = insp.notes.filter((n) => n.kind === 'observation' || n.priority);
+    const stats: [string, string][] = site ? [
+      ['Mängel', String(defects.length)],
+      ['davon offen', String(defects.filter((n) => n.status === 'open' || n.status === 'progress').length)],
+      ['erledigt', String(defects.filter((n) => n.status === 'done').length)],
+      ['Fotos', String(insp.photos.length)],
+    ] : [
       ['Trassenlänge', formatDistance(routeLength(insp.route, insp.plans)) + (hasUnscaledLength(insp.route, insp.plans) ? '*' : '')],
       ['Wegpunkte', String(insp.route.points.filter((p) => p.kind === 'route').length)],
       ['Fotos', String(insp.photos.length)],
@@ -230,7 +240,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
         : await renderStaticMap(insp, activePlanId ? { ...ps, mapView: null } : ps, MAP_ASPECT, onProgress);
       if (!map) { if (plan) warnings.push(`Plan „${plan.name}“ konnte nicht geladen werden.`); continue; }
       L.newPage(false);
-      L.heading(plan ? `Übersichtsplan: ${plan.name}` : 'Übersichtskarte');
+      L.heading(plan ? `Übersichtsplan: ${plan.name}` : site ? 'Lage der Mängel und Fotos' : 'Übersichtskarte');
       const img = await doc.embedJpg(map.jpeg);
       let w = L.width;
       let h = w / MAP_ASPECT;
@@ -268,7 +278,13 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
       }
       L.y -= 6;
       L.ensure(30);
-      const items: [string, (x: number, y: number) => void][] = [
+      const dot = (c: string) => (x: number, y: number) => L.page.drawCircle({ x: x + 5, y: y + 3, size: 5, color: hex(c) });
+      const items: [string, (x: number, y: number) => void][] = site && !plan ? [
+        ['Mangel offen', dot(DEFECT_COLORS.open)],
+        ['in Bearbeitung', dot(DEFECT_COLORS.progress)],
+        ['erledigt', dot(DEFECT_COLORS.done)],
+        ['Foto ohne Mangel', (x, y) => { L.page.drawRectangle({ x, y: y - 1, width: 16, height: 9, color: rgb(0.11, 0.11, 0.12) }); }],
+      ] : [
         ['Start', (x, y) => L.page.drawCircle({ x: x + 5, y: y + 3, size: 5, color: rgb(0.12, 0.56, 0.24) })],
         ['Ende', (x, y) => L.page.drawCircle({ x: x + 5, y: y + 3, size: 5, color: rgb(0.77, 0.13, 0.12) })],
         ['Wegpunkt', (x, y) => L.page.drawCircle({ x: x + 5, y: y + 3, size: 4, color: C.white, borderColor: C.text, borderWidth: 1.2 })],
@@ -315,6 +331,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
         p.planId
           ? ['Lage', `auf Plan „${insp.plans?.find((x) => x.id === p.planId)?.name ?? 'Plan'}“`]
           : ['Koordinaten (WGS84)', p.position ? `${coord(p.position.lat, p.position.lng)}${p.accuracy ? `  (±${Math.round(p.accuracy)} m)` : ''}` : 'nicht verortet'],
+        ['Prüfung', p.check && p.check !== 'open' ? CHECK_LABEL[p.check] : p.check === 'open' ? CHECK_LABEL.open : ''],
         ['Station', p.station],
         ['Abschnitt', seg?.name ?? (p.kind === 'marker' ? 'Markierung' : '')],
         ['Quelle', SOURCE_LABEL[p.source]],
@@ -336,20 +353,24 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
   if (ps.include.notes && notes.length) {
     onProgress('Notizen …');
     L.newPage(false);
-    L.heading('Beobachtungen und Notizen');
+    L.heading(insp.kind === 'baustelle' ? 'Mängel und Notizen' : 'Beobachtungen und Notizen');
     for (const n of notes) {
       L.ensure(50);
       L.y -= 4;
-      L.text(`${n.title || n.category || 'Notiz'}`, { size: 10.5, font: L.bold, width: L.width - 70 });
+      const mNo = site ? siteDefects(insp).indexOf(n) + 1 : 0;
+      L.text(`${mNo ? `M${mNo} · ` : ''}${n.title || n.category || 'Notiz'}`, { size: 10.5, font: L.bold, width: L.width - 70 });
       L.at(STATUS_LABEL[n.status], L.right, L.y + 3, 8.5, L.bold, n.status === 'open' ? C.warn : C.muted, 70, 'right');
-      const meta = [n.kind === 'observation' ? 'Beobachtung' : 'Notiz', n.category, n.station && `Station ${n.station}`, n.pointId && `Punkt ${pointName(n.pointId)}`, time(n.createdAt), n.origin === 'voice' ? 'per Sprache erfasst' : '']
+      const meta = [n.kind === 'observation' ? (site ? 'Mangel' : 'Beobachtung') : 'Notiz', n.category, n.priority ? PRIO_LABEL[n.priority] : '', n.station && `Station ${n.station}`, n.pointId && `Punkt ${pointName(n.pointId)}`, time(n.createdAt), n.origin === 'voice' ? 'per Sprache erfasst' : '']
         .filter(Boolean).join(' · ');
       L.text(meta, { size: 8, color: C.muted, after: 2 });
+      if (n.address) L.text(`Adresse: ${n.address}`, { size: 8, color: C.muted, after: 1 });
+      if (n.dueDate || n.assignee) L.text([n.dueDate ? `Frist: ${formatDate(n.dueDate)}` : '', n.assignee ? `Zuständig: ${n.assignee}` : ''].filter(Boolean).join(' · '), { size: 8, color: C.muted, after: 1 });
       if (n.position) L.text(`GPS ${coord(n.position.lat, n.position.lng)}${n.position.accuracy ? ` (±${Math.round(n.position.accuracy)} m)` : ''}`, { size: 8, color: C.muted, after: 2 });
       if (!n.confirmed) L.text('Automatisch strukturiert – nicht bestätigt.', { size: 8.5, font: L.bold, color: C.warn, after: 2 });
       L.text(n.description, { size: 9.5, after: 2 });
       if (n.hint) L.text(`Hinweis: ${n.hint}`, { size: 9.5, font: L.oblique, after: 2 });
-      await photoGrid(insp.photos.filter((f) => f.noteId === n.id && f.pointId !== n.pointId));
+      // Fotos, die schon beim Trassenpunkt stehen, nicht doppelt zeigen
+      await photoGrid(insp.photos.filter((f) => f.noteId === n.id && !(f.pointId && f.pointId === n.pointId)));
       L.space(6);
       L.hr();
       L.space(4);
@@ -422,7 +443,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
     const top = L.y - 8;
     const sig = insp.signature;
     const boxes: [string, string, string, string | null][] = [
-      ['Begeher', sig?.name || insp.meta.inspector, sig ? `${sig.place ? sig.place + ', ' : ''}${time(sig.signedAt)}` : '', sig?.dataUrl || null],
+      [site ? 'Kontrolleur' : 'Begeher', sig?.name || insp.meta.inspector, sig ? `${sig.place ? sig.place + ', ' : ''}${time(sig.signedAt)}` : '', sig?.dataUrl || null],
       ['Freigabe Auftraggeber', insp.meta.contactPerson || insp.meta.client, '', null],
     ];
     for (const [i, [title, name, when, img]] of boxes.entries()) {
@@ -454,7 +475,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
     const right = w - tpl.margins.right * MM;
     if (tpl.drawHeader && !L.coverIndex.has(i)) {
       const top = page.getHeight() - (tpl.margins.top * MM) / 2;
-      const head = settings.company.name || 'Begehungsprotokoll';
+      const head = settings.company.name || docName;
       page.drawText(san(head), { x: left, y: top, size: 8.5, font: L.bold, color: C.text });
       const r = san(`${insp.meta.projectName}${insp.meta.date ? ' · ' + formatDate(insp.meta.date) : ''}`);
       const rw = L.font.widthOfTextAtSize(r, 8.5);
@@ -462,7 +483,7 @@ export async function generatePdf(insp: Inspection, settings: Settings, tpl: Pdf
       page.drawLine({ start: { x: left, y: top - 6 }, end: { x: right, y: top - 6 }, thickness: 0.5, color: C.line });
     }
     if (tpl.drawHeader) {
-      const f = san(`Begehungsprotokoll ${insp.meta.projectNumber || insp.meta.projectName}`.trim());
+      const f = san(`${docName} ${insp.meta.projectNumber || insp.meta.projectName}`.trim());
       page.drawText(f, { x: left, y: bottom, size: 7.5, font: L.font, color: C.muted });
     }
     if (tpl.drawPageNumbers) {
@@ -486,6 +507,6 @@ async function embedDataUrl(doc: PDFDocument, dataUrl: string): Promise<PDFImage
 }
 
 export function reportFileName(insp: Inspection): string {
-  const base = `Begehungsprotokoll_${insp.meta.projectNumber || insp.meta.projectName || 'Projekt'}_${insp.meta.date}`;
+  const base = `${insp.kind === 'baustelle' ? 'Maengelbericht' : 'Begehungsprotokoll'}_${insp.meta.projectNumber || insp.meta.projectName || 'Projekt'}_${insp.meta.date}`;
   return base.replace(/[^\wäöüÄÖÜß.-]+/g, '_').replace(/_+/g, '_') + '.pdf';
 }

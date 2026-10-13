@@ -134,6 +134,26 @@ markiert. Fehlt Richtung oder Entfernung, wird **keine** Position erfunden – d
   nicht direkt ins Dateisystem schreiben dürfen.
 * Lokale Vorschau: `scripts/preview.sh` (ohne Service Worker, Hinweisbalken, räumt alte Zwischenspeicher auf).
 
+## Design, Dashboard & Baustellenkontrolle
+
+* Darstellung (`Settings.design`: `trasse` grün · `magenta` · `klassisch`, plus `textSize`) über `data-design`/`data-styled`/`data-text`
+  am `<html>`; Farben in `src/styles/design.css`. Globale Leiste `ui/AppTabs.tsx` (Übersicht, Begehungen, +, Meldungen, Profil).
+* Startseite (`screens/Home.tsx`) ist das Dashboard: Ort (Reverse-Geocoding der letzten GPS-Position, nur mit Standort-Freigabe),
+  Start-Auswahl (`ui/StartChooser.tsx`: Begehung / Baustelle kontrollieren), Kennzahlen, Mängel-Ring (`ui/Donut.tsx`),
+  „To do“ = offene Mängel nach Frist, Trassen & Baustellen, letzte Aktivitäten. „Meldungen“ listet Notizen/Mängel aller Vorgänge.
+* `Inspection.kind = 'baustelle'` (Anlage über `#/new?kind=baustelle`): eigene Übersicht `BaustelleOverview.tsx`,
+  Tab „Mängel“, Mangel-Kategorien `SITE_CATEGORIES`. „Mangel aufnehmen“ (`actionDefectPhoto`) = Kamera → Mangel (offen,
+  mittel) mit GPS → Foto am Mangel → Formular (Priorität, Status inkl. „in Bearbeitung“, Frist, Zuständig).
+* PDF für Baustellen: „Mängelbericht“, Kennzahlen Mängel/offen/erledigt/Fotos, Karte mit Mangel-Markern M1… nach Status,
+  Mängelliste mit derselben Nummer, Foto, Adresse und GPS.
+* Standort = **Koordinaten + Adresse**: Fotos und Notizen/Mängel speichern die GPS-Position sofort; die Adresse
+  (`places/address.ts`, Nominatim reverse) wird bei Netz ergänzt bzw. später nachgetragen (`fillMissingAddresses` beim Öffnen
+  und beim „online“-Ereignis). Abschaltbar über die Adresssuche in den Einstellungen.
+* Fotoexport (`camera/exportPhotos.ts`, `ExportSheet.tsx`): optional mit Stempel (Datum/Uhrzeit, Adresse, GPS ±, Projekt,
+  Mangel) als JPEG; auf dem iPhone über das Teilen-Menü („Bilder sichern“ → Fotos-App), am PC als Download.
+  Zwei Schritte (vorbereiten → sichern), weil iOS das Teilen nur direkt nach einem Tipp erlaubt.
+* GPX-Export des Routenverlaufs (`share/gpx.ts`) unter „Mehr“.
+
 ## Straßen, Hausnummern, Kreuzungen (Adresssuche)
 
 * `places/placeParser.ts` erkennt im Text Straßennamen (Endungen wie -straße, -weg, -gasse … sowie „Am …“, „Neue Straße“),

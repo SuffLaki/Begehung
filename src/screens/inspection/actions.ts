@@ -7,7 +7,8 @@ import { confirmDialog, errorText, toast, useApp } from '../../state/appStore';
 import { currentFix, fixIfAvailable } from '../../geo/gps';
 import { addRoutePoint } from '../../geo/routeOps';
 import { addPhotos, pickImages } from '../../camera/photo';
-import { pointDisplayName } from '../../model/factory';
+import { newNote, pointDisplayName } from '../../model/factory';
+import { enrichAddress } from '../../places/address';
 import type { MapTool } from '../../map/RouteMap';
 import { activePlan } from '../../plans/plans';
 import { navigate } from '../../router';
@@ -21,7 +22,7 @@ interface UiState {
   annotateId: string | null;
   /** 'new' = neue Notiz */
   noteId: string | null;
-  notePrefill: { pointId?: string | null } | null;
+  notePrefill: { pointId?: string | null; defect?: boolean } | null;
   voice: { mode: VoiceMode; text?: string } | null;
   segmentsOpen: boolean;
   recorderOpen: boolean;
@@ -31,6 +32,8 @@ interface UiState {
   mapTool: MapTool | null;
   /** Plan, der gerade auf der Landkarte eingepasst wird */
   adjustPlanId: string | null;
+  /** Fotos, die exportiert werden sollen */
+  exportPhotoIds: string[] | null;
   set(p: Partial<UiState>): void;
 }
 
@@ -46,11 +49,12 @@ export const useUi = create<UiState>((set) => ({
   basemapOpen: false,
   mapTool: null,
   adjustPlanId: null,
+  exportPhotoIds: null,
   set: (p) => set(p),
 }));
 
 export function resetUi() {
-  useUi.setState({ pointId: null, photoId: null, annotateId: null, noteId: null, notePrefill: null, voice: null, segmentsOpen: false, recorderOpen: false, basemapOpen: false, mapTool: null, adjustPlanId: null });
+  useUi.setState({ pointId: null, photoId: null, annotateId: null, noteId: null, notePrefill: null, voice: null, segmentsOpen: false, recorderOpen: false, basemapOpen: false, mapTool: null, adjustPlanId: null, exportPhotoIds: null });
 }
 
 /** 📍 Aktuelle GPS-Position als nächsten Trassenpunkt setzen */
@@ -122,4 +126,34 @@ export function actionVoice(mode: VoiceMode = 'note', text?: string) {
 
 export function actionNote(pointId: string | null = null) {
   useUi.getState().set({ noteId: 'new', notePrefill: { pointId } });
+}
+
+/** Mangel an einem Punkt melden (Notiz als Beobachtung, offen, Priorität mittel) */
+export function actionDefect(pointId: string | null) {
+  useUi.getState().set({ pointId: null, noteId: 'new', notePrefill: { pointId, defect: true } });
+}
+
+/**
+ * 📷 Mangel aufnehmen: Kamera → Foto → Mangel (offen, Priorität mittel) mit
+ * Standort (Koordinaten sofort, Adresse sobald online) → Formular öffnet sich.
+ * Muss direkt im Klick-Handler aufgerufen werden (iOS).
+ */
+export function actionDefectPhoto() {
+  const fixPromise = fixIfAvailable();
+  const picking = pickImages({ camera: true });
+  void (async () => {
+    const files = await picking;
+    if (!files.length) return;
+    const fix = await fixPromise;
+    const note = newNote({ kind: 'observation', title: 'Mangel', status: 'open', priority: 'medium', position: fix, origin: 'text', confirmed: true });
+    useInspection.getState().mutate((d) => { d.notes.push(note); });
+    enrichAddress('note', note.id, fix);
+    try {
+      await addPhotos(files, { noteId: note.id, fixPromise: Promise.resolve(fix) });
+    } catch (e) {
+      toast(`Foto konnte nicht gespeichert werden: ${errorText(e)}`, 'error');
+    }
+    useUi.getState().set({ noteId: note.id });
+    if (!fix) toast('Ohne GPS-Position gespeichert – Standort bei Bedarf im Formular übernehmen.', 'info');
+  })();
 }

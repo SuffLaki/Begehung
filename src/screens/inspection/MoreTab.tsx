@@ -3,7 +3,7 @@ import { Users, FileImage, FileText, Flag, PenTool, ClipboardEdit, ListChecks, S
 import { useInspection } from '../../state/inspectionStore';
 import { useApp, confirmDialog, toast, errorText } from '../../state/appStore';
 import { navigate } from '../../router';
-import { Banner, Field, Nav, Row, Sheet, Spinner, fmtDateTime } from '../../ui/kit';
+import { Banner, Field, Nav, Row, Sheet, Spinner, fmtDateTime, fmtDuration } from '../../ui/kit';
 import SignaturePad from '../../ui/SignaturePad';
 import { can } from '../../model/permissions';
 import { newTask } from '../../model/factory';
@@ -11,6 +11,8 @@ import { aiConfigured, getAi } from '../../ai/ai';
 import { deleteInspection, deleteReport, listReports } from '../../storage/db';
 import { exportInspection } from '../../storage/backup';
 import { saveLocally, shareFile } from '../../share/share';
+import { buildGpx } from '../../share/gpx';
+import { formatDistance, routeLength } from '../../geo/geo';
 import type { Report } from '../../model/types';
 import { useCanEdit, UndoRedo } from './parts';
 import { pointDisplayName } from '../../model/factory';
@@ -74,6 +76,21 @@ export default function MoreTab() {
             </div>
           </>
         )}
+
+        <div className="group-title">Routenverlauf</div>
+        <div className="card stack">
+          <div className="rec-stats">
+            <div><b>{formatDistance(routeLength(insp.route, insp.plans))}</b><span>Strecke</span></div>
+            <div><b>{insp.route.tracks.length ? fmtDuration(insp.route.tracks.reduce((t, x) => t + x.durationMs, 0)) : '–'}</b><span>Dauer (GPS)</span></div>
+            <div><b>{insp.route.points.filter((p) => p.kind === 'route' && !p.vertex).length}</b><span>Punkte</span></div>
+          </div>
+          <button className="btn primary block" onClick={() => {
+            const g = buildGpx(insp);
+            if (g.empty) { toast('Keine Kartenpunkte vorhanden – GPX braucht Koordinaten (Punkte auf nicht eingepassten Plänen haben keine).', 'error'); return; }
+            saveLocally(new Blob([g.xml], { type: 'application/gpx+xml' }), g.fileName).then((r) => r === 'downloaded' && toast(`„${g.fileName}“ gespeichert.`, 'success')).catch((e) => toast(errorText(e), 'error'));
+          }}><Download size={18} />Als GPX exportieren</button>
+          <div className="small muted">GPX öffnet sich in GPS- und GIS-Programmen (z. B. QGIS, Google Earth). Höhenprofil nicht verfügbar – die App speichert keine Höhenwerte.</div>
+        </div>
 
         <div className="group-title">Daten</div>
         <div className="list">

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Building2, ImagePlus, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, User as UserIcon, X } from 'lucide-react';
 import { useApp, toast, errorText, confirmDialog } from '../state/appStore';
-import { navigate } from '../router';
 import { Banner, Field, Nav, Seg, SelectField, SwitchRow, Spinner } from '../ui/kit';
 import type { MapType, Role, Settings } from '../model/types';
 import { DEFAULT_CATEGORIES, DEFAULT_LINE_TYPES, uid } from '../model/factory';
@@ -11,6 +10,7 @@ import { pickFile, loadImage, scaleToCanvas } from '../camera/photo';
 import { storageEstimate } from '../storage/db';
 import { getAi } from '../ai/ai';
 import { getSync } from '../sync/sync';
+import AppTabs from '../ui/AppTabs';
 
 export default function SettingsScreen() {
   const s = useApp((x) => x.settings);
@@ -73,8 +73,42 @@ export default function SettingsScreen() {
 
   return (
     <div className="screen">
-      <Nav title="Einstellungen" backLabel="Start" onBack={() => { saveText(); navigate('/', true); }} />
-      <div className="scroll">
+      <Nav title="Profil & Einstellungen" />
+      <div className="scroll with-tabs">
+        {/* ------------------------------------------------ Profil */}
+        <div className="profile-card" style={{ marginTop: 8 }}>
+          <div className="avatar">{(draft.user.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()}</div>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <b className="ellipsis" style={{ display: 'block', fontSize: 18 }}>{draft.user.name || 'Name eintragen'}</b>
+            <div className="small muted ellipsis">{ROLE_LABELS[s.user.role]}{draft.company.name ? ` · ${draft.company.name}` : ''}</div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ Darstellung */}
+        <div className="group-title">Darstellung</div>
+        <div className="design-choice" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+          {([
+            ['trasse', 'Trasse', 'grün', 'linear-gradient(165deg, #1f5c46, #10322a)'],
+            ['magenta', 'Magenta', 'pink-rot', 'linear-gradient(165deg, #e20074, #85004a)'],
+            ['klassisch', 'Klassisch', 'blau', 'linear-gradient(165deg, #1b6ee0, #0f2f63)'],
+          ] as const).map(([k, l, sub, bg]) => (
+            <button key={k} className={(s.design ?? 'trasse') === k ? 'on' : ''} aria-pressed={(s.design ?? 'trasse') === k} onClick={() => commit((x) => { x.design = k; })}>
+              <div className="sw" style={{ background: bg }}><i /></div>
+              <b style={{ fontSize: 14 }}>{l}</b>
+              <div className="tiny muted">{sub}</div>
+            </button>
+          ))}
+        </div>
+        <div className="card stack" style={{ marginTop: 10 }}>
+          <div className="small muted">Farbmodus</div>
+          <Seg<Settings['theme']> value={s.theme} onChange={(v) => commit((x) => { x.theme = v; })} options={[{ value: 'auto', label: 'Automatisch' }, { value: 'light', label: 'Hell' }, { value: 'dark', label: 'Dunkel' }]} />
+          <div className="small muted">Schriftgröße</div>
+          <Seg<'normal' | 'large'> value={s.textSize ?? 'normal'} onChange={(v) => commit((x) => { x.textSize = v; })} options={[{ value: 'normal', label: 'Normal' }, { value: 'large', label: 'Groß (für draußen)' }]} />
+          <div className="small muted">Standard-Kartenansicht</div>
+          <Seg<MapType> value={s.defaultMapType} onChange={(v) => commit((x) => { x.defaultMapType = v; })} options={(Object.keys(MAP_TYPES) as MapType[]).map((k) => ({ value: k, label: MAP_TYPES[k].label }))} />
+          <div className="small muted">Tipp: In praller Sonne sind „Hell“ und „Groß“ meist besser lesbar.</div>
+        </div>
+
         {/* ------------------------------------------------ Benutzer */}
         <div className="group-title">Benutzer</div>
         <div className="list">
@@ -172,15 +206,6 @@ export default function SettingsScreen() {
           {s.gps.locationConsent && <button className="btn sm plain" onClick={() => commit((x) => { x.gps.locationConsent = false; })}>Standort-Freigabe in der App zurücknehmen</button>}
         </div>
 
-        {/* ------------------------------------------------ Darstellung */}
-        <div className="group-title">Darstellung</div>
-        <div className="card stack">
-          <Seg<Settings['theme']> value={s.theme} onChange={(v) => commit((x) => { x.theme = v; })} options={[{ value: 'auto', label: 'Automatisch' }, { value: 'light', label: 'Hell' }, { value: 'dark', label: 'Dunkel' }]} />
-          <div className="small muted">Tipp: In praller Sonne ist „Hell“ meist besser lesbar.</div>
-          <div>Standard-Kartenansicht</div>
-          <Seg<MapType> value={s.defaultMapType} onChange={(v) => commit((x) => { x.defaultMapType = v; })} options={(Object.keys(MAP_TYPES) as MapType[]).map((k) => ({ value: k, label: MAP_TYPES[k].label }))} />
-        </div>
-
         {/* ------------------------------------------------ E-Mail */}
         <div className="group-title">E-Mail-Vorlage</div>
         <div className="list">
@@ -216,6 +241,7 @@ export default function SettingsScreen() {
           }
         }}><Trash2 size={16} />KI-Schlüssel vom Gerät löschen</button>
       </div>
+      <AppTabs active="profil" />
     </div>
   );
 }

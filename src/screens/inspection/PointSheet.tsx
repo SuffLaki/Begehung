@@ -8,7 +8,7 @@ import { branchFrom, deletePoint, endpoints, movePoint, segmentEndingAt, segment
 import { formatCoord } from '../../geo/geo';
 import { accuracyLabel, currentFix } from '../../geo/gps';
 import { Banner, Field, Row, SelectField, Sheet, fmtDateTime } from '../../ui/kit';
-import { actionNote, actionPhoto, useUi } from './actions';
+import { actionDefect, actionNote, actionPhoto, useUi } from './actions';
 import { useCanEdit } from './parts';
 import { PhotoThumb } from './PhotosTab';
 
@@ -66,6 +66,20 @@ export default function PointSheet() {
   return (
     <Sheet open onClose={close} title={`${pointDisplayName(p)} · ${role}`} right={<button className="nav-btn" style={{ fontWeight: 600, marginTop: 8 }} onClick={close}>Fertig</button>}>
       <div className="stack">
+        {canEdit && (p.kind === 'route' || p.kind === 'marker') && (
+          <div>
+            <div className="small muted" style={{ margin: '0 4px 6px' }}>Prüfung</div>
+            <div className="seg" role="tablist" aria-label="Prüfstatus">
+              {([['open', 'Offen'], ['ok', 'OK'], ['defect', 'Mangel']] as const).map(([k, l]) => (
+                <button key={k} className={(p.check ?? 'open') === k ? 'on' : ''} style={(p.check ?? 'open') === k && k !== 'open' ? { background: k === 'ok' ? '#23824f' : '#d0352b', color: '#fff' } : undefined}
+                  onClick={() => {
+                    mutate((d) => { const x = d.route.points.find((q) => q.id === p.id); if (x) { x.check = k; x.updatedAt = Date.now(); } });
+                    if (k === 'defect' && !notes.some((n) => n.status !== 'done')) { commit(); actionDefect(p.id); }
+                  }}>{l}</button>
+              ))}
+            </div>
+          </div>
+        )}
         {!p.confirmed && (
           <Banner>
             <b>Automatisch ermittelt</b> – {p.position ? 'Lage aus Sprachbeschreibung geschätzt.' : 'noch ohne Position.'}

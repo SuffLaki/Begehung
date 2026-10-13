@@ -13,6 +13,12 @@ export const DEFAULT_CATEGORIES = [
   'Baum/Bewuchs', 'Leitung', 'Mast', 'Schacht', 'Hindernis', 'Kreuzung', 'Besonderheit', 'Sonstiges',
 ];
 
+/** Kategorien für Mängel bei der Baustellenkontrolle */
+export const SITE_CATEGORIES = [
+  'Absturzsicherung', 'Arbeitssicherheit', 'Verkehrssicherung', 'Gerüst', 'Ordnung / Sauberkeit', 'Ausführungsmangel',
+  'Material', 'Baugrube / Tiefbau', 'Leitungen', 'Elektro', 'Umweltschutz', 'Dokumentation', 'Sonstiges',
+];
+
 /** Linienarten für Foto-Markierungen (in den Einstellungen erweiterbar) */
 export const DEFAULT_LINE_TYPES: LineType[] = [
   { key: 'tiefbau', label: 'Tiefbau', color: '#E53935', keywords: ['tiefbau'] },
@@ -199,6 +205,8 @@ export function defaultSettings(): Settings {
     gps: { maxAccuracyM: 30, locationConsent: false },
     micConsent: false,
     theme: 'auto',
+    design: 'trasse',
+    textSize: 'normal',
     user: { id: uid('u'), name: '', role: 'admin' },
     mail: {
       to: '',

@@ -10,7 +10,12 @@ import { navigate } from '../../router';
 
 type Filter = 'all' | 'open' | 'review';
 
-export const NOTE_STATUS: Record<Note['status'], string> = { open: 'offen', done: 'erledigt', info: 'zur Info' };
+export const NOTE_STATUS: Record<Note['status'], string> = { open: 'offen', progress: 'in Bearbeitung', done: 'erledigt', info: 'zur Info' };
+export const PRIORITY: Record<NonNullable<Note['priority']>, { label: string; color: string }> = {
+  low: { label: 'Niedrig', color: '#23824f' },
+  medium: { label: 'Mittel', color: '#e0a100' },
+  high: { label: 'Hoch', color: '#d0352b' },
+};
 
 export default function NotesTab() {
   const insp = useInspection((s) => s.insp)!;

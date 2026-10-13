@@ -5,6 +5,7 @@ import { listInspections } from '../storage/db';
 import { navigate } from '../router';
 import { Empty, Loading, Nav, Seg } from '../ui/kit';
 import { InspectionRow } from './common';
+import AppTabs from '../ui/AppTabs';
 
 type Filter = 'all' | 'open' | 'done';
 
@@ -37,9 +38,9 @@ export default function InspectionList() {
 
   return (
     <div className="screen">
-      <Nav title="Meine Begehungen" backLabel="Start" right={<button className="nav-btn" onClick={() => navigate('/new')} aria-label="Neue Begehung"><Plus size={24} /></button>} />
+      <Nav title="Meine Begehungen" right={<button className="nav-btn" onClick={() => navigate('/new')} aria-label="Neue Begehung"><Plus size={24} /></button>} />
       {!rows ? <Loading /> : (
-        <div className="scroll">
+        <div className="scroll with-tabs">
           <div className="stack" style={{ marginTop: 6 }}>
             <label className="search"><Search size={18} /><input placeholder="Projekt, Nummer, Auftraggeber …" value={q} onChange={(e) => setQ(e.target.value)} type="search" /></label>
             <Seg<Filter> value={filter} onChange={setFilter} options={[{ value: 'all', label: 'Alle' }, { value: 'open', label: 'Offen' }, { value: 'done', label: 'Abgeschlossen' }]} />
@@ -54,6 +55,7 @@ export default function InspectionList() {
           ))}
         </div>
       )}
+      <AppTabs active="list" />
     </div>
   );
 }

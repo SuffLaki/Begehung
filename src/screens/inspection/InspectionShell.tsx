@@ -6,7 +6,10 @@ import { Loading, Nav } from '../../ui/kit';
 import { toast } from '../../state/appStore';
 import { adoptOpenTrack, resetRecorder, startGps, useRecorder } from '../../geo/gps';
 import { useApp } from '../../state/appStore';
-import { resetUi } from './actions';
+import { resetUi, useUi } from './actions';
+import { fillMissingAddresses } from '../../places/address';
+import ExportSheet from './ExportSheet';
+import BaustelleOverview from './BaustelleOverview';
 import OverviewTab from './OverviewTab';
 import MapTab from './MapTab';
 import PhotosTab from './PhotosTab';
@@ -50,6 +53,9 @@ export default function InspectionShell({ id, tab }: { id: string; tab: string }
         return;
       }
       adoptOpenTrack(useInspection.getState().insp!.route.tracks);
+      void fillMissingAddresses();
+      const note = /[?&]note=([^&]+)/.exec(window.location.hash)?.[1];
+      if (note) useUi.getState().set({ noteId: note });
     });
   }, [id]);
 
@@ -61,13 +67,13 @@ export default function InspectionShell({ id, tab }: { id: string; tab: string }
   if (missing) return null;
   if (!insp || insp.id !== id) return <div className="screen"><Nav title="Begehung" backLabel="Start" /><Loading /></div>;
 
-  const openNotes = insp.notes.filter((n) => !n.confirmed).length;
+  const openNotes = insp.kind === 'baustelle' ? insp.notes.filter((n) => n.status === 'open').length : insp.notes.filter((n) => !n.confirmed).length;
   const autoPoints = insp.route.points.filter((p) => !p.confirmed).length;
   const unassigned = insp.photos.filter((f) => !f.pointId && !f.noteId).length;
 
   return (
     <div className="screen">
-      {tab === 'overview' && <OverviewTab />}
+      {tab === 'overview' && (insp.kind === 'baustelle' ? <BaustelleOverview /> : <OverviewTab />)}
       {tab === 'map' && <MapTab />}
       {tab === 'photos' && <PhotosTab />}
       {tab === 'notes' && <NotesTab />}
@@ -80,7 +86,7 @@ export default function InspectionShell({ id, tab }: { id: string; tab: string }
           return (
             <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => navigate(`/i/${id}/${t.id}`, true)} aria-current={tab === t.id}>
               <Icon size={25} strokeWidth={tab === t.id ? 2.3 : 1.8} />
-              {t.label}
+              {insp.kind === 'baustelle' ? ({ overview: 'Kontrolle', notes: 'Mängel' } as Record<string, string>)[t.id] ?? t.label : t.label}
               {!!badge && <span className="tab-badge">{badge}</span>}
             </button>
           );
@@ -94,6 +100,7 @@ export default function InspectionShell({ id, tab }: { id: string; tab: string }
       <SegmentsSheet />
       <AnnotateSheet />
       <BasemapSheet />
+      <ExportSheet />
     </div>
   );
 }

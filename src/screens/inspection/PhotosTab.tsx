@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Camera, ImagePlus, Images } from 'lucide-react';
+import { Camera, ImagePlus, Images, Download } from 'lucide-react';
 import { useInspection } from '../../state/inspectionStore';
 import type { PhotoMeta } from '../../model/types';
 import { usePhotoUrl } from '../../camera/photoUrls';
@@ -60,6 +60,9 @@ export default function PhotosTab() {
               { value: 'nogps', label: 'Ohne GPS' },
             ]} />
           </div>
+        )}
+        {photos.length > 0 && (
+          <button className="btn sm block" style={{ marginBottom: 10 }} onClick={() => useUi.getState().set({ exportPhotoIds: photos.map((f) => f.id) })}><Download size={16} />{photos.length === 1 ? 'Foto' : `Alle ${photos.length} Fotos`} exportieren / in Galerie sichern</button>
         )}
         {photos.length ? (
           <div className="photo-grid">

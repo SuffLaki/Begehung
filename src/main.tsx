@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles/app.css';
+import './styles/design.css';
 
 // Vorschau: alte Service Worker/Zwischenspeicher entfernen (sonst zeigt der Browser einen alten Stand)
 if (import.meta.env.VITE_PREVIEW_BANNER && 'serviceWorker' in navigator) {

@@ -1,0 +1,232 @@
+/* ================================================================ Design „Trasse“ (grün)
+   Umschaltbar unter Einstellungen → Darstellung. Liegt als Schicht über dem
+   Grunddesign (app.css): Komponenten bleiben gleich, nur Farben/Formen ändern sich. */
+:root[data-design='trasse'] {
+  --bg: #f2f4f3;
+  --bg-elev: #ffffff;
+  --bg-elev2: #f6f8f7;
+  --fill: rgba(30, 70, 55, 0.08);
+  --fill-strong: rgba(30, 70, 55, 0.16);
+  --text: #101a16;
+  --text-2: #33433c;
+  --text-3: #66756e;
+  --sep: rgba(30, 60, 50, 0.14);
+  --accent: #1d5b45;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(29, 91, 69, 0.11);
+  --ok: #23824f;
+  --ok-soft: rgba(35, 130, 79, 0.13);
+  --hero: linear-gradient(165deg, #1f5c46 0%, #164233 55%, #10322a 100%);
+  --hero-solid: #18493a;
+  --blur-bg: rgba(250, 252, 251, 0.9);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design='trasse']:not([data-theme='light']) {
+    --bg: #0c1310;
+    --bg-elev: #151f1a;
+    --bg-elev2: #1c2822;
+    --fill: rgba(140, 200, 170, 0.1);
+    --fill-strong: rgba(140, 200, 170, 0.18);
+    --text: #f1f6f3;
+    --text-2: #d3ded8;
+    --text-3: #93a69c;
+    --sep: rgba(140, 200, 170, 0.16);
+    --accent: #4cc08f;
+    --accent-text: #052017;
+    --accent-soft: rgba(76, 192, 143, 0.17);
+    --hero: linear-gradient(165deg, #173f31 0%, #10302a 60%, #0b231d 100%);
+    --hero-solid: #133a2e;
+    --blur-bg: rgba(18, 28, 23, 0.9);
+  }
+}
+:root[data-design='trasse'][data-theme='dark'] {
+  --bg: #0c1310;
+  --bg-elev: #151f1a;
+  --bg-elev2: #1c2822;
+  --fill: rgba(140, 200, 170, 0.1);
+  --fill-strong: rgba(140, 200, 170, 0.18);
+  --text: #f1f6f3;
+  --text-2: #d3ded8;
+  --text-3: #93a69c;
+  --sep: rgba(140, 200, 170, 0.16);
+  --accent: #4cc08f;
+  --accent-text: #052017;
+  --accent-soft: rgba(76, 192, 143, 0.17);
+  --hero: linear-gradient(165deg, #173f31 0%, #10302a 60%, #0b231d 100%);
+  --hero-solid: #133a2e;
+  --blur-bg: rgba(18, 28, 23, 0.9);
+}
+
+/* ================================================================ Design „Magenta“ */
+:root[data-design='magenta'] {
+  --bg: #f5f2f4;
+  --bg-elev: #ffffff;
+  --bg-elev2: #faf6f8;
+  --fill: rgba(140, 0, 80, 0.07);
+  --fill-strong: rgba(140, 0, 80, 0.14);
+  --text: #1a0f15;
+  --text-2: #42333b;
+  --text-3: #75666e;
+  --sep: rgba(110, 40, 80, 0.15);
+  --accent: #c9006b;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(201, 0, 107, 0.1);
+  --hero: linear-gradient(165deg, #e20074 0%, #b8005f 55%, #85004a 100%);
+  --hero-solid: #b8005f;
+  --blur-bg: rgba(252, 250, 251, 0.9);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design='magenta']:not([data-theme='light']) {
+    --bg: #110b0e;
+    --bg-elev: #1c1418;
+    --bg-elev2: #251b20;
+    --fill: rgba(255, 140, 200, 0.1);
+    --fill-strong: rgba(255, 140, 200, 0.18);
+    --text: #f8f1f5;
+    --text-2: #e4d6de;
+    --text-3: #a8949f;
+    --sep: rgba(255, 140, 200, 0.16);
+    --accent: #ff5fae;
+    --accent-text: #2a0016;
+    --accent-soft: rgba(255, 95, 174, 0.17);
+    --hero: linear-gradient(165deg, #8a0048 0%, #5e0032 60%, #3d0022 100%);
+    --hero-solid: #6e003b;
+    --blur-bg: rgba(26, 18, 22, 0.9);
+  }
+}
+:root[data-design='magenta'][data-theme='dark'] {
+  --bg: #110b0e;
+  --bg-elev: #1c1418;
+  --bg-elev2: #251b20;
+  --fill: rgba(255, 140, 200, 0.1);
+  --fill-strong: rgba(255, 140, 200, 0.18);
+  --text: #f8f1f5;
+  --text-2: #e4d6de;
+  --text-3: #a8949f;
+  --sep: rgba(255, 140, 200, 0.16);
+  --accent: #ff5fae;
+  --accent-text: #2a0016;
+  --accent-soft: rgba(255, 95, 174, 0.17);
+  --hero: linear-gradient(165deg, #8a0048 0%, #5e0032 60%, #3d0022 100%);
+  --hero-solid: #6e003b;
+  --blur-bg: rgba(26, 18, 22, 0.9);
+}
+
+:root[data-design='klassisch'] { --hero: linear-gradient(165deg, #1b4e9b, #0f2f63); --hero-solid: #163f80; }
+
+/* Kopfzeilen im Trasse-Design: dunkelgrün mit weißer Schrift */
+:root[data-styled] .nav { background: var(--hero-solid); color: #fff; border-bottom: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-styled] .nav .nav-btn { color: #fff; }
+:root[data-styled] .nav .nav-btn:disabled { color: rgba(255, 255, 255, 0.4); }
+:root[data-styled] .btn { border-radius: 12px; }
+:root[data-styled] .btn.primary { box-shadow: 0 2px 8px rgba(16, 50, 40, 0.25); }
+:root[data-styled] .list,
+:root[data-styled] .card,
+:root[data-styled] .stat,
+:root[data-styled] .action { box-shadow: 0 1px 0 var(--sep), 0 1px 6px rgba(16, 40, 30, 0.05); }
+:root[data-design='trasse'] .a-loc { background: #1d5b45; }
+:root[data-design='magenta'] .a-loc { background: #b3005e; }
+:root[data-design='trasse'] .a-mic { background: #c0392b; }
+:root[data-design='trasse'] .a-note { background: #d68a17; }
+:root[data-styled] .badge.accent { background: var(--ok-soft); color: var(--ok); }
+
+/* Schriftgröße „groß“ (für draußen) – die Karte selbst bleibt unverändert */
+:root[data-text='large'] .scroll,
+:root[data-text='large'] .nav,
+:root[data-text='large'] .sheet-body,
+:root[data-text='large'] .sheet-head,
+:root[data-text='large'] .dialog,
+:root[data-text='large'] .preview-bar,
+:root[data-text='large'] .toasts,
+:root[data-text='large'] .ov-bar { zoom: 1.12; }
+
+/* ================================================================ App-Navigation mit „+“ */
+.apptabs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr); align-items: end; height: calc(var(--tabbar-h) + var(--safe-b)); padding: 0 4px var(--safe-b); background: var(--blur-bg); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: 0.5px solid var(--sep); }
+.apptabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: var(--tabbar-h); font-size: 11px; font-weight: 500; color: var(--text-3); position: relative; }
+.apptabs button.on { color: var(--accent); font-weight: 600; }
+.apptabs .plus { width: 56px; height: 56px; border-radius: 28px; background: var(--accent); color: var(--accent-text); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(16, 50, 40, 0.35); margin-bottom: 14px; }
+.apptabs .tab-badge { position: absolute; top: 4px; left: calc(50% + 6px); min-width: 18px; height: 18px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
+
+/* ================================================================ Startseite */
+.home-hero { background: var(--hero); color: #fff; padding: calc(var(--safe-t) + 18px) 20px 54px; position: relative; }
+.home-hero h1 { margin: 0; font-size: 26px; font-weight: 700; }
+.home-hero p { margin: 4px 0 0; opacity: 0.85; font-size: 15px; }
+.home-hero .hero-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 8px; }
+.home-hero .hero-top .pill { background: rgba(255, 255, 255, 0.15); color: #fff; }
+.next-card { margin: -38px 16px 0; position: relative; z-index: 2; background: var(--bg-elev); border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 6px 22px rgba(10, 30, 22, 0.16); width: calc(100% - 32px); text-align: left; }
+.next-card .nc-icon { width: 46px; height: 46px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex: none; }
+.next-card small { color: var(--text-3); font-size: 12px; }
+.next-card b { display: block; font-size: 17px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 4px 8px; }
+.section-head h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.section-head button { color: var(--accent); font-size: 14px; font-weight: 600; }
+.trasse-row .row-icon { background: var(--accent-soft) !important; color: var(--accent) !important; }
+.quick-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.quick-links button { background: var(--bg-elev); border-radius: 12px; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-2); box-shadow: 0 1px 0 var(--sep); }
+.quick-links button svg { color: var(--accent); }
+
+/* ================================================================ Prüfstatus */
+.progress { height: 10px; border-radius: 5px; background: var(--fill-strong); overflow: hidden; }
+.progress > i { display: block; height: 100%; border-radius: 5px; background: var(--ok); transition: width 0.3s; }
+.check-ico { width: 30px; height: 30px; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: #fff; flex: none; font-weight: 800; }
+.check-ico.ok { background: #23824f; }
+.check-ico.defect { background: #d0352b; }
+.check-ico.open { background: var(--fill-strong); color: var(--text-2); }
+.row.defect-row { background: rgba(208, 53, 43, 0.07); }
+.mk-pt.ck-ok { background: #23824f; border-color: #fff; color: #fff; }
+.mk-pt.ck-defect { background: #d0352b; border-color: #fff; color: #fff; }
+.prio-dot { width: 10px; height: 10px; border-radius: 5px; display: inline-block; flex: none; }
+
+/* ================================================================ Startbildschirm */
+.splash { position: fixed; inset: 0; z-index: 2000; background: var(--hero); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; transition: opacity 0.35s ease; overflow: hidden; }
+.splash.hide { opacity: 0; pointer-events: none; }
+.splash h1 { font-size: 32px; margin: 14px 0 6px; font-weight: 700; position: relative; }
+.splash p { margin: 0; opacity: 0.85; font-size: 16px; position: relative; }
+.splash .ver { position: absolute; bottom: calc(var(--safe-b) + 18px); font-size: 12px; opacity: 0.6; }
+.splash svg.scene { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 48%; }
+.splash .logo { position: relative; }
+
+/* ================================================================ Offline-Hinweis */
+.offline-modal { position: fixed; inset: 0; z-index: 1500; background: var(--hero); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px; text-align: center; gap: 12px; }
+.offline-modal h2 { margin: 6px 0 0; font-size: 26px; }
+.offline-modal p { margin: 0; opacity: 0.85; max-width: 360px; line-height: 1.45; }
+.offline-modal .ring { width: 96px; height: 96px; border-radius: 48px; border: 3px solid rgba(255, 255, 255, 0.5); display: flex; align-items: center; justify-content: center; }
+.offline-modal ul { list-style: none; padding: 12px 16px; margin: 8px 0; background: rgba(255, 255, 255, 0.08); border-radius: 14px; text-align: left; width: 100%; max-width: 360px; }
+.offline-modal li { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 15px; }
+.offline-modal .btn { width: 100%; max-width: 360px; background: rgba(255, 255, 255, 0.92); color: #10322a; }
+
+/* ================================================================ Profil / Darstellung */
+.profile-card { display: flex; align-items: center; gap: 14px; background: var(--bg-elev); border-radius: 16px; padding: 14px; box-shadow: 0 1px 0 var(--sep); }
+.avatar { width: 56px; height: 56px; border-radius: 28px; background: var(--accent); color: var(--accent-text); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex: none; }
+.design-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.design-choice button { border-radius: 14px; padding: 10px; background: var(--bg-elev); border: 2px solid transparent; text-align: left; box-shadow: 0 1px 0 var(--sep); }
+.design-choice button.on { border-color: var(--accent); }
+.design-choice .sw { height: 54px; border-radius: 10px; margin-bottom: 8px; position: relative; overflow: hidden; }
+.design-choice .sw i { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 14px; border-radius: 4px; background: #fff; }
+
+/* ================================================================ Dashboard / Baustelle */
+.start-cards { display: grid; gap: 10px; }
+.start-card { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 16px; background: var(--accent); color: var(--accent-text); text-align: left; box-shadow: 0 4px 14px rgba(10, 30, 22, 0.18); }
+.start-card.alt { background: var(--bg-elev); color: var(--text); box-shadow: 0 1px 0 var(--sep), 0 2px 10px rgba(10, 30, 22, 0.08); }
+.start-card .sc-icon { width: 48px; height: 48px; border-radius: 14px; background: rgba(255, 255, 255, 0.18); display: flex; align-items: center; justify-content: center; flex: none; }
+.start-card.alt .sc-icon { background: var(--accent-soft); color: var(--accent); }
+.start-card b { display: block; font-size: 17px; }
+.start-card small { display: block; font-size: 13px; opacity: 0.8; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpi { background: var(--bg-elev); border-radius: 14px; padding: 12px; box-shadow: 0 1px 0 var(--sep); text-align: left; }
+.kpi .ki { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+.kpi b { display: block; font-size: 22px; }
+.kpi span { font-size: 12px; color: var(--text-3); }
+.donut-wrap { display: flex; align-items: center; gap: 14px; }
+.donut-legend { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.donut-legend span { display: flex; align-items: center; gap: 8px; }
+.donut-legend i { width: 10px; height: 10px; border-radius: 5px; display: inline-block; }
+.donut-legend b { margin-left: auto; padding-left: 8px; }
+.defect-card { display: flex; gap: 12px; padding: 12px; width: 100%; text-align: left; align-items: center; position: relative; }
+.defect-card + .defect-card::before { content: ''; position: absolute; top: 0; left: 12px; right: 0; border-top: 0.5px solid var(--sep); }
+.defect-card .thumb { width: 56px; height: 56px; border-radius: 10px; overflow: hidden; background: var(--fill); flex: none; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
+.defect-card .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.defect-card .meta { font-size: 12px; color: var(--text-3); }
+.big-defect { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 78px; border-radius: 18px; background: #c0392b; color: #fff; font-size: 19px; font-weight: 700; box-shadow: 0 4px 16px rgba(192, 57, 43, 0.35); }
+.big-defect:active { transform: scale(0.98); }
+.hero-place { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; opacity: 0.9; }

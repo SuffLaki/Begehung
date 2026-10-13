@@ -92,6 +92,7 @@ export function summarize(i: Inspection): InspectionSummaryRow {
   return {
     id: i.id,
     projectName: i.meta.projectName,
+    kind: i.kind,
     projectNumber: i.meta.projectNumber,
     inspectionNumber: i.meta.inspectionNumber,
     date: i.meta.date,
@@ -107,6 +108,11 @@ export function summarize(i: Inspection): InspectionSummaryRow {
     createdAt: i.createdAt,
     updatedAt: i.updatedAt,
   };
+}
+
+/** alle Begehungen vollständig (für Startseite/Meldungen; Fotos liegen separat) */
+export async function listAllInspections(): Promise<Inspection[]> {
+  return (await (await db()).getAll('inspections')).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function listInspections(): Promise<InspectionSummaryRow[]> {

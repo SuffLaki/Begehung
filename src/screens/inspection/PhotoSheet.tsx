@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, Trash2, MapPin, CheckCircle2, PenLine } from 'lucide-react';
+import { Sparkles, Trash2, MapPin, CheckCircle2, PenLine, Download } from 'lucide-react';
 import { AnnotatedPhoto } from '../../annotate/AnnotationLayer';
 import { legendText } from '../../annotate/lines';
 import { useInspection } from '../../state/inspectionStore';
@@ -84,6 +84,10 @@ export default function PhotoSheet() {
             <PenLine size={18} />{f.annotations?.length ? 'Linien bearbeiten' : 'Linien einzeichnen (Tiefbau, Leerrohr …)'}
           </button>
         )}
+        {f.position && (
+          <div className="small center muted">📍 {f.address || f.placeLabel || 'Adresse folgt'} · {formatCoord(f.position, 6)}</div>
+        )}
+        <button className="btn block" onClick={() => { commit(); useUi.getState().set({ photoId: null, exportPhotoIds: [f.id] }); }}><Download size={18} />Exportieren / in Galerie sichern</button>
 
         {f.pointAutoAssigned && f.pointId && (
           <Banner kind="info">
@@ -123,7 +127,8 @@ export default function PhotoSheet() {
 
         <div className="list">
           <Row title="Aufgenommen" value={fmtDateTime(f.takenAt)} chevron={false} />
-          <Row title={f.positionSource === 'address' ? 'Position (aus Adresse)' : 'GPS'} value={f.position ? formatCoord(f.position) : 'keine Position'} chevron={false} />
+          <Row title="Koordinaten" value={f.position ? `${formatCoord(f.position)}${f.positionSource === 'address' ? ' (aus Adresse)' : ''}` : 'keine Position'} chevron={false} />
+          <Row title="Adresse" value={f.address || f.placeLabel || (f.position ? (navigator.onLine ? 'wird ermittelt …' : 'wird nachgetragen (offline)') : '–')} chevron={false} />
           {f.placeLabel && <Row title="Ort" value={f.placeLabel} chevron={false} />}
           {f.position && <Row title="Genauigkeit" value={acc.text} chevron={false} />}
           <Row title="Größe" value={`${f.width} × ${f.height} px`} chevron={false} />

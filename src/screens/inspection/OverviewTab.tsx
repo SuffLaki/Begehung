@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FileText, Flag, Lock, MapPin, Camera, StickyNote, AlertTriangle, CloudUpload, Unlock } from 'lucide-react';
 import { useInspection } from '../../state/inspectionStore';
 import { useApp, confirmDialog } from '../../state/appStore';
@@ -10,6 +11,7 @@ import { activePlan } from '../../plans/plans';
 import { FileImage } from 'lucide-react';
 import { formatDate } from '../../pdf/generator';
 import { pointDisplayName } from '../../model/factory';
+import { endpoints, isRelevantPoint, orderedPoints } from '../../geo/routeOps';
 import { useUi } from './actions';
 import { can } from '../../model/permissions';
 
@@ -30,6 +32,10 @@ export default function OverviewTab() {
   const completed = insp.status === 'completed';
 
   const routePts = insp.route.points.filter((p) => p.kind === 'route');
+  const ends = endpoints(insp);
+  const checkPoints = orderedPoints(insp).filter((p) => p.kind === 'route' && (!p.vertex || isRelevantPoint(insp, p, ends.startIds, ends.endIds)));
+  const checked = checkPoints.filter((p) => p.check === 'ok' || p.check === 'defect').length;
+  const [showAll, setShowAll] = useState(false);
   const auto = insp.route.points.filter((p) => !p.confirmed);
   const unplaced = insp.route.points.filter((p) => !p.position);
   const loose = insp.photos.filter((f) => !f.pointId && !f.noteId);
@@ -76,6 +82,24 @@ export default function OverviewTab() {
           )}
           {!completed && !activePlan(insp) && <GpsLine />}
           {!completed && !activePlan(insp) && <RecorderCard />}
+
+          {checkPoints.length > 0 && (
+            <div className="card stack">
+              <div className="hstack"><b className="grow">Prüfung</b><span className="small muted">{checked} von {checkPoints.length} Punkten</span></div>
+              <div className="progress" aria-label={`${checked} von ${checkPoints.length} geprüft`}><i style={{ width: `${(checked / checkPoints.length) * 100}%` }} /></div>
+              <div className="list" style={{ boxShadow: 'none', margin: '0 -16px -16px' }}>
+                {checkPoints.slice(0, showAll ? undefined : 6).map((p) => (
+                  <Row key={p.id} className={p.check === 'defect' ? 'defect-row' : ''}
+                    icon={<span className={`check-ico ${p.check ?? 'open'}`}>{p.check === 'ok' ? '✓' : p.check === 'defect' ? '!' : '•'}</span>}
+                    iconBg="transparent"
+                    title={`${pointDisplayName(p)}${p.title ? ' – ' + p.title : ''}`}
+                    sub={<span style={{ color: p.check === 'ok' ? 'var(--ok)' : p.check === 'defect' ? 'var(--danger)' : undefined }}>{p.check === 'ok' ? 'OK' : p.check === 'defect' ? 'Mangel' : 'Offen'}</span>}
+                    onClick={() => ui.set({ pointId: p.id })} />
+                ))}
+                {checkPoints.length > 6 && <button className="btn sm plain block" onClick={() => setShowAll(!showAll)}>{showAll ? 'Weniger anzeigen' : `Alle ${checkPoints.length} Punkte anzeigen`}</button>}
+              </div>
+            </div>
+          )}
 
           <div className="stats">
             <div className="stat"><b>{hasUnscaledLength(insp.route, insp.plans) && !routeLength(insp.route, insp.plans) ? '–' : formatDistance(routeLength(insp.route, insp.plans))}</b><span>{hasUnscaledLength(insp.route, insp.plans) ? 'Trasse*' : 'Trasse'}</span></div>

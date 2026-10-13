@@ -418,7 +418,7 @@ export default function RouteMap(props: Props) {
         html = `<div class="mk-vertex${p.confirmed ? '' : ' auto'}" style="--c:${color}"></div>`;
         size = editMode ? [30, 30] : [14, 14];
       } else {
-        const role = startIds.has(p.id) ? ' start' : endIds.has(p.id) ? ' end' : '';
+        const role = p.check === 'ok' ? ' ck-ok' : p.check === 'defect' ? ' ck-defect' : startIds.has(p.id) ? ' start' : endIds.has(p.id) ? ' end' : '';
         const text = startIds.has(p.id) && !p.label ? 'S' : endIds.has(p.id) && !p.label ? 'E' : escapeHtml(p.label || String(p.number));
         html = `<div class="mk-pt${role}${sel ? ' sel' : ''}${p.confirmed ? '' : ' auto'}" style="--c:${color}"><span>${text}</span></div>${p.title ? `<div class="mk-label">${escapeHtml(p.title)}</div>` : ''}`;
         size = [38, 38];

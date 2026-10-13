@@ -9,6 +9,7 @@ import { savePhotoBlob } from '../storage/db';
 import { useInspection } from '../state/inspectionStore';
 import { fixIfAvailable } from '../geo/gps';
 import { nearestPoint } from '../geo/geo';
+import { enrichAddress } from '../places/address';
 
 const FULL_MAX = 2048;
 const THUMB_MAX = 360;
@@ -118,6 +119,7 @@ export async function addPhotos(files: File[], opts: { pointId?: string | null; 
       d.photos.push(meta);
     });
     added.push(meta);
+    enrichAddress('photo', meta.id, fix);
   }
   return added;
 }

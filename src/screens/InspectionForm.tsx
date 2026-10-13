@@ -9,13 +9,14 @@ import { navigate } from '../router';
 import { useApp, toast, errorText } from '../state/appStore';
 import { useInspection } from '../state/inspectionStore';
 import { Field, Loading, Nav, SwitchRow, Spinner } from '../ui/kit';
-import { currentFix, gpsSupported } from '../geo/gps';
+import { currentFix, ensureLocationConsent, gpsSupported } from '../geo/gps';
 import { addRoutePoint } from '../geo/routeOps';
 import { canEditInspection } from '../model/permissions';
 import { useUi } from './inspection/actions';
 import ParticipantsEditor, { mergeContacts } from './ParticipantsEditor';
 
 export default function InspectionForm({ editId }: { editId?: string }) {
+  const isSite = editId ? useInspection.getState().insp?.kind === 'baustelle' : /[?&]kind=baustelle/.test(window.location.hash);
   const settings = useApp((s) => s.settings);
   const insp = useInspection((s) => s.insp);
   const [meta, setMeta] = useState<InspectionMeta | null>(editId ? null : { ...emptyMeta(), inspector: settings.user.name });
@@ -80,7 +81,8 @@ export default function InspectionForm({ editId }: { editId?: string }) {
         return;
       }
       const insp = newInspection(m, projectId, settings.user, settings.defaultTemplateId, settings.defaultMapType);
-      if (useGpsStart && !usePlan) {
+      if (isSite) insp.kind = 'baustelle';
+      if (useGpsStart && !usePlan && !isSite) {
         try {
           const fix = await currentFix(30000, 15000);
           const p = addRoutePoint(insp, fix, { source: 'gps', accuracy: fix.accuracy, title: m.startPoint || 'Startpunkt' });
@@ -93,8 +95,10 @@ export default function InspectionForm({ editId }: { editId?: string }) {
       if (settings.user.name !== m.inspector && !settings.user.name) {
         void useApp.getState().updateSettings((s) => { s.user.name = m.inspector; });
       }
-      navigate(`/i/${insp.id}/map`, true);
+      navigate(`/i/${insp.id}/${isSite && !usePlan ? 'overview' : 'map'}`, true);
       if (usePlan) window.setTimeout(() => useUi.getState().set({ basemapOpen: true }), 300);
+      // Baustelle: Standort gleich freigeben und vorwärmen, damit das erste Mangelfoto Koordinaten hat
+      else if (isSite && gpsSupported()) void ensureLocationConsent().then((ok) => { if (ok) void currentFix(30000, 15000).catch(() => null); });
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -106,7 +110,7 @@ export default function InspectionForm({ editId }: { editId?: string }) {
   return (
     <div className="screen">
       <Nav
-        title={editId ? 'Projektdaten' : 'Neue Begehung'}
+        title={editId ? 'Projektdaten' : isSite ? 'Baustelle kontrollieren' : 'Neue Begehung'}
         backLabel={editId ? 'Zurück' : 'Abbrechen'}
         onBack={() => navigate(back, true)}
         right={!readOnly && <button className="nav-btn" style={{ fontWeight: 600 }} onClick={submit} disabled={busy}>{busy ? <Spinner /> : editId ? 'Sichern' : 'Weiter'}</button>}
@@ -127,10 +131,10 @@ export default function InspectionForm({ editId }: { editId?: string }) {
             <div className="grow"><Field label="Datum" type="date" required invalid={tried && invalid.date} value={meta.date} onChange={set('date')} readOnly={readOnly} /></div>
             <div style={{ width: '38%' }}><Field label="Uhrzeit" type="time" value={meta.time} onChange={set('time')} readOnly={readOnly} /></div>
           </div>
-          <Field label="Mitarbeiter / Begeher" required invalid={tried && invalid.inspector} value={meta.inspector} onChange={set('inspector')} readOnly={readOnly} />
-          <Field label="Begehungsnummer" value={meta.inspectionNumber} onChange={set('inspectionNumber')} placeholder="automatisch, wenn leer" readOnly={readOnly} />
+          <Field label={isSite ? 'Mitarbeiter / Kontrolleur' : 'Mitarbeiter / Begeher'} required invalid={tried && invalid.inspector} value={meta.inspector} onChange={set('inspector')} readOnly={readOnly} />
+          <Field label={isSite ? 'Kontrollnummer' : 'Begehungsnummer'} value={meta.inspectionNumber} onChange={set('inspectionNumber')} placeholder="automatisch, wenn leer" readOnly={readOnly} />
           <Field label="Baustelle / Bereich" value={meta.site} onChange={set('site')} readOnly={readOnly} />
-          <Field label="Startpunkt (Beschreibung)" value={meta.startPoint} onChange={set('startPoint')} placeholder="z. B. UW Ulm-Nord, Tor 2" readOnly={readOnly} />
+          {!isSite && <Field label="Startpunkt (Beschreibung)" value={meta.startPoint} onChange={set('startPoint')} placeholder="z. B. UW Ulm-Nord, Tor 2" readOnly={readOnly} />}
         </div>
 
         <div className="group-title" id="teilnehmer">Teilnehmer ({(meta.participants ?? []).length})</div>
@@ -139,22 +143,22 @@ export default function InspectionForm({ editId }: { editId?: string }) {
           <>
             <div className="list" style={{ marginTop: 12 }}>
               <SwitchRow title="Plan statt Karte verwenden" sub="Vorhandenen Lageplan (PDF/Bild) einfügen und darauf arbeiten" checked={usePlan} onChange={setUsePlan} />
-              {!usePlan && gpsSupported() && <SwitchRow title="GPS-Standort als Startpunkt" sub="Setzt den ersten Trassenpunkt an deine aktuelle Position" checked={useGpsStart} onChange={setUseGpsStart} />}
+              {!usePlan && !isSite && gpsSupported() && <SwitchRow title="GPS-Standort als Startpunkt" sub="Setzt den ersten Trassenpunkt an deine aktuelle Position" checked={useGpsStart} onChange={setUseGpsStart} />}
             </div>
-            <div className="group-foot hstack"><MapPin size={14} /> Den Startpunkt kannst du später auf der Karte verschieben.</div>
+            <div className="group-foot hstack"><MapPin size={14} /> {isSite ? 'Jeder Mangel bekommt automatisch Koordinaten und Adresse.' : 'Den Startpunkt kannst du später auf der Karte verschieben.'}</div>
           </>
         )}
 
         <div className="group-title">Beschreibung & Bemerkungen</div>
         <div className="list">
-          <Field label="Beschreibung" multiline value={meta.description} onChange={set('description')} placeholder="Ziel/Umfang der Begehung" readOnly={readOnly} />
+          <Field label="Beschreibung" multiline value={meta.description} onChange={set('description')} placeholder={isSite ? 'Gewerk, Anlass der Kontrolle' : 'Ziel/Umfang der Begehung'} readOnly={readOnly} />
           <Field label="Allgemeine Bemerkungen" multiline value={meta.remarks} onChange={set('remarks')} placeholder="Wetter, Teilnehmer, Besonderheiten …" readOnly={readOnly} />
         </div>
 
         {!readOnly && (
           <div style={{ marginTop: 20 }}>
             <button className="btn primary big block" onClick={submit} disabled={busy}>
-              {busy ? <Spinner /> : editId ? 'Speichern' : 'Begehung starten'}
+              {busy ? <Spinner /> : editId ? 'Speichern' : isSite ? 'Kontrolle starten' : 'Begehung starten'}
             </button>
           </div>
         )}

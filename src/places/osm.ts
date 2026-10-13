@@ -152,3 +152,16 @@ export async function routeAlong(from: LatLng, to: LatLng): Promise<LatLng[] | n
     return null;
   }
 }
+
+/** Koordinate → Adresse („Olgastraße 100, 89073 Ulm“); null, wenn nichts Passendes gefunden */
+export async function reverseGeocode(pos: LatLng): Promise<string | null> {
+  const p = new URLSearchParams({ format: 'jsonv2', lat: pos.lat.toFixed(6), lon: pos.lng.toFixed(6), zoom: '18', addressdetails: '1' });
+  const url = `https://nominatim.openstreetmap.org/reverse?${p}`;
+  const r = await throttled(url, () => getJson<{ address?: Record<string, string>; display_name?: string; error?: string }>(url));
+  const a = r?.address;
+  if (!a) return null;
+  const street = [a.road ?? a.pedestrian ?? a.footway ?? a.path ?? a.square ?? '', a.house_number ?? ''].filter(Boolean).join(' ');
+  const place = [a.postcode ?? '', a.city ?? a.town ?? a.village ?? a.municipality ?? ''].filter(Boolean).join(' ');
+  const s = [street, place].filter(Boolean).join(', ');
+  return s || null;
+}

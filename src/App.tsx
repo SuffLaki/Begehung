@@ -13,6 +13,8 @@ import InspectionShell from './screens/inspection/InspectionShell';
 import PdfWizard from './screens/PdfWizard';
 import PdfPreview from './screens/PdfPreview';
 import FinishCheck from './screens/FinishCheck';
+import Meldungen from './screens/Meldungen';
+import Splash, { OfflineNotice } from './ui/Splash';
 
 let started = false;
 
@@ -20,6 +22,8 @@ export default function App() {
   const route = useRoute();
   const loaded = useApp((s) => s.settingsLoaded);
   const theme = useApp((s) => s.settings.theme);
+  const design = useApp((s) => s.settings.design ?? 'trasse');
+  const textSize = useApp((s) => s.settings.textSize ?? 'normal');
 
   useEffect(() => {
     if (started) return;
@@ -33,16 +37,21 @@ export default function App() {
     const root = document.documentElement;
     if (theme === 'auto') root.removeAttribute('data-theme');
     else root.setAttribute('data-theme', theme);
+    root.setAttribute('data-design', design);
+    if (design === 'klassisch') root.removeAttribute('data-styled'); else root.setAttribute('data-styled', '');
+    root.setAttribute('data-text', textSize);
     const dark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#000000' : '#f2f2f7');
-  }, [theme]);
+    const bar = design === 'trasse' ? (dark ? '#133a2e' : '#18493a') : design === 'magenta' ? (dark ? '#6e003b' : '#b8005f') : dark ? '#000000' : '#f2f2f7';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bar);
+  }, [theme, design, textSize]);
 
-  if (!loaded) return <div className="app"><Loading /></div>;
+  if (!loaded) return <div className="app"><Loading /><Splash /></div>;
 
   const [a, b, c] = route;
   let screen;
   if (!a) screen = <Home />;
   else if (a === 'list') screen = <InspectionList />;
+  else if (a === 'meldungen') screen = <Meldungen />;
   else if (a === 'new') screen = <InspectionForm />;
   else if (a === 'templates') screen = <Templates />;
   else if (a === 'settings') screen = <SettingsScreen />;
@@ -60,6 +69,8 @@ export default function App() {
       {screen}
       <DialogHost />
       <Toasts />
+      <OfflineNotice />
+      <Splash />
     </div>
   );
 }

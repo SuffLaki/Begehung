@@ -30,10 +30,18 @@ const projY = (lat: number, z: number) => {
   return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * TILE * 2 ** z;
 };
 
+/** Mängel einer Baustellenkontrolle in Berichtsreihenfolge (Nummer = Index + 1, „M1“ …) */
+export function siteDefects(insp: Inspection) {
+  return insp.notes.filter((n) => n.kind === 'observation' || n.priority);
+}
+
+export const DEFECT_COLORS: Record<string, string> = { open: '#D0352B', progress: '#E0A100', done: '#23824F', info: '#8E8E93' };
+
 export function contentBounds(insp: Inspection): MapBounds | null {
   const pts = [
     ...insp.route.points.flatMap((p) => (p.position && !p.planId ? [p.position] : [])),
     ...insp.photos.flatMap((f) => (f.position ? [f.position] : [])),
+    ...(insp.kind === 'baustelle' ? siteDefects(insp).flatMap((n) => (n.position ? [n.position] : [])) : []),
   ];
   if (!pts.length) insp.route.tracks.forEach((t) => t.fixes.forEach((f) => pts.push(f)));
   return boundsOf(pts);
@@ -246,8 +254,11 @@ function drawOverlay(g: CanvasRenderingContext2D, insp: Inspection, ps: PdfSetti
   g.setLineDash([]);
 
   // ---------------------------------------------- Fotos
+  const site = insp.kind === 'baustelle' && !space;
+  const placedDefects = new Set(site ? siteDefects(insp).filter((n) => n.position).map((n) => n.id) : []);
   if (ps.showPhotoMarkers) {
     for (const f of insp.photos) {
+      if (f.noteId && placedDefects.has(f.noteId)) continue; // steht schon als Mangel-Marker
       const pos = space ? (f.pointId ? byId.get(f.pointId)?.position : null) : f.position ?? (f.pointId ? byId.get(f.pointId)?.position : null);
       if (!pos) continue;
       const [x, y] = toPx(pos.lat, pos.lng);
@@ -259,6 +270,23 @@ function drawOverlay(g: CanvasRenderingContext2D, insp: Inspection, ps: PdfSetti
       g.textBaseline = 'middle';
       g.fillText(`F${f.number}`, x, y + 0.5 * S);
     }
+  }
+
+  // ---------------------------------------------- Mängel (Baustellenkontrolle)
+  if (site) {
+    siteDefects(insp).forEach((n, i) => {
+      if (!n.position) return;
+      const [x, y] = toPx(n.position.lat, n.position.lng);
+      const r = 11 * S;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
+      g.fillStyle = DEFECT_COLORS[n.status] ?? DEFECT_COLORS.open; g.fill();
+      g.lineWidth = 2 * S; g.strokeStyle = '#FFFFFF'; g.stroke();
+      g.fillStyle = '#FFFFFF';
+      g.font = `bold ${10 * S}px Helvetica, Arial, sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(`M${i + 1}`, x, y + 0.5 * S);
+    });
   }
 
   // ---------------------------------------------- Punkte
@@ -294,14 +322,14 @@ function drawOverlay(g: CanvasRenderingContext2D, insp: Inspection, ps: PdfSetti
     }
     const r = (isStart || isEnd ? 10 : 8) * S;
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
-    g.fillStyle = isStart ? '#1E8E3E' : isEnd ? '#C5221F' : '#FFFFFF';
+    g.fillStyle = p.check === 'ok' ? '#23824F' : p.check === 'defect' ? '#D0352B' : isStart ? '#1E8E3E' : isEnd ? '#C5221F' : '#FFFFFF';
     g.fill();
     g.lineWidth = 2.5 * S;
     g.strokeStyle = isStart || isEnd ? '#FFFFFF' : color;
     if (!p.confirmed) g.setLineDash([3 * S, 2 * S]);
     g.stroke();
     g.setLineDash([]);
-    g.fillStyle = isStart || isEnd ? '#FFFFFF' : '#111111';
+    g.fillStyle = isStart || isEnd || (p.check && p.check !== 'open') ? '#FFFFFF' : '#111111';
     g.font = `bold ${(isStart || isEnd ? 11 : 9) * S}px Helvetica, Arial, sans-serif`;
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(isStart ? 'S' : isEnd ? 'E' : '', x, y + 0.5 * S);

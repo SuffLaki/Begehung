@@ -220,7 +220,7 @@ export function trackToSegment(d: Inspection, trackId: string, toleranceM = 4): 
   }
   let n = nextNumber(d, 'route');
   for (const f of simple) {
-    const p = newPoint({ number: n++, position: { lat: f.lat, lng: f.lng }, accuracy: f.acc, source: 'gps', confirmed: true });
+    const p = newPoint({ number: n++, position: { lat: f.lat, lng: f.lng }, accuracy: f.acc, source: 'gps', confirmed: true, vertex: f !== simple[0] && f !== simple[simple.length - 1] });
     d.route.points.push(p);
     seg.pointIds.push(p.id);
   }
